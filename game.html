@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Kid Adventure</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #game-container {
+            border: 4px solid #0f3460;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(224, 224, 224, 0.3);
+        }
+        canvas {
+            display: block;
+            background-color: #16213e;
+        }
+        #info-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            padding: 10px 20px;
+            background-color: #0f3460;
+            border-top: 4px solid #e94560;
+            box-sizing: border-box;
+        }
+        .info-text {
+            font-size: 16px;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(15, 52, 96, 0.9);
+            color: white;
+            padding: 40px;
+            border: 4px solid #e94560;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 24px;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #restart-button, #next-level-button {
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            color: #1a1a2e;
+            background-color: #e94560;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #restart-button:hover, #next-level-button:hover {
+            background-color: #ff7691;
+        }
+    </style>
+</head>
+<body>
+    <div id="info-bar">
+        <div id="score" class="info-text">Score: 0</div>
+        <div id="level-indicator" class="info-text">Level: 1</div>
+        <div id="ammo-indicator" class="info-text">Ammo: 10</div>
+        <div class="info-text">Space to Shoot</div>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div id="message-box">
+        <div id="message-text"></div>
+        <button id="next-level-button">Next Level</button>
+        <button id="restart-button">Restart Game</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const levelIndicatorEl = document.getElementById('level-indicator');
+        const ammoIndicatorEl = document.getElementById('ammo-indicator');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const restartButton = document.getElementById('restart-button');
+        const nextLevelButton = document.getElementById('next-level-button');
+
+        // --- Game Configuration ---
+        const config = {
+            gravity: 0.6,
+            playerSpeed: 5,
+            jumpForce: 15,
+            playerWidth: 40,
+            playerHeight: 60,
+            enemySpeed: 2,
+            bulletSpeed: 10,
+            maxLevels: 10
+        };
+        
+        const levelConfigs = [
+            // Level 1
+            { width: 2000, enemies: 1, gems: 5, pitChance: 0.1, floaters: 3 },
+            // Level 2
+            { width: 2200, enemies: 2, gems: 7, pitChance: 0.15, floaters: 4 },
+            // Level 3
+            { width: 2400, enemies: 2, gems: 8, pitChance: 0.2, floaters: 5 },
+            // Level 4
+            { width: 2600, enemies: 3, gems: 10, pitChance: 0.25, floaters: 6 },
+            // Level 5
+            { width: 2800, enemies: 4, gems: 12, pitChance: 0.25, floaters: 7 },
+            // Level 6
+            { width: 3000, enemies: 4, gems: 14, pitChance: 0.3, floaters: 8 },
+            // Level 7
+            { width: 3200, enemies: 5, gems: 15, pitChance: 0.3, floaters: 9 },
+            // Level 8
+            { width: 3400, enemies: 6, gems: 16, pitChance: 0.35, floaters: 10 },
+            // Level 9
+            { width: 3600, enemies: 7, gems: 18, pitChance: 0.35, floaters: 11 },
+            // Level 10
+            { width: 4000, enemies: 8, gems: 20, pitChance: 0.4, floaters: 12 },
+        ];
+
+        let camera = { x: 0, y: 0 };
+        let player = {};
+        let platforms = [];
+        let gems = [];
+        let enemies = [];
+        let bullets = [];
+        let door = {};
+        let score = 0;
+        let currentLevel = 1;
+        let keys = { left: false, right: false, up: false, space: false };
+        let gameActive = true;
+
+        // --- Asset Drawing Functions ---
+        function drawPlayer(p) {
+            ctx.save();
+            // Translate to the player's center for scaling
+            ctx.translate(p.x + p.width / 2, p.y + p.height / 2);
+            // Flip the context if the player is facing left
+            ctx.scale(p.direction, 1);
+            // Translate back
+            ctx.translate(-(p.x + p.width / 2), -(p.y + p.height / 2));
+
+            // Draw the player (now correctly oriented)
+            ctx.fillStyle = '#1c3a6b'; ctx.fillRect(p.x + 5, p.y + 35, 10, 25); ctx.fillRect(p.x + 25, p.y + 35, 10, 25);
+            ctx.fillStyle = '#4a90e2'; ctx.fillRect(p.x, p.y + 20, p.width, 20);
+            ctx.fillStyle = '#e94560'; ctx.beginPath(); ctx.arc(p.x + p.width / 2, p.y + 15, p.width / 2, Math.PI, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = '#1a1a2e'; ctx.fillRect(p.x + 5, p.y + 10, p.width - 10, 10);
+
+            ctx.restore(); // Restore the context to its original state
+        }
+        function drawPlatform(p) { 
+            ctx.fillStyle = '#0f3460'; ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.strokeStyle = '#53bf9d'; ctx.lineWidth = 4; ctx.strokeRect(p.x, p.y, p.width, p.height);
+        }
+        function drawGem(g) {
+            ctx.fillStyle = g.type === 'blue' ? '#4a90e2' : '#f9c74f';
+            ctx.save(); ctx.translate(g.x + g.width / 2, g.y + g.height / 2); ctx.rotate(g.angle);
+            ctx.beginPath(); ctx.moveTo(0, -g.height / 2); ctx.lineTo(g.width / 2, 0); ctx.lineTo(0, g.height / 2); ctx.lineTo(-g.width / 2, 0); ctx.closePath(); ctx.fill();
+            ctx.restore(); g.angle += 0.05;
+        }
+        function drawEnemy(e) { 
+            ctx.fillStyle = '#333'; ctx.fillRect(e.x, e.y + e.height - 10, e.width, 10);
+            ctx.fillStyle = '#888'; ctx.fillRect(e.x, e.y, e.width, e.height - 5);
+            ctx.fillStyle = '#ff4136'; ctx.beginPath(); ctx.arc(e.x + e.width / 2, e.y + e.height / 2 - 5, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(e.x + e.width / 2 + 3, e.y + e.height / 2 - 8, 2, 0, Math.PI * 2); ctx.fill();
+        }
+        function drawDoor(d) { 
+            ctx.fillStyle = '#8B4513'; ctx.fillRect(d.x, d.y, d.width, d.height);
+            ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(d.x + d.width * 0.8, d.y + d.height / 2, 5, 0, Math.PI * 2); ctx.fill();
+        }
+        function drawBullet(b) {
+            ctx.fillStyle = '#f9c74f'; // Yellow bullet
+            ctx.fillRect(b.x, b.y, b.width, b.height);
+        }
+
+        // --- Seeded Random Number Generator ---
+        class SeededRandom {
+            constructor(seed) { this.seed = seed; }
+            next() { this.seed = (this.seed * 1664525 + 1013904223) % 2**32; return this.seed / 2**32; }
+        }
+
+        // --- Level Generation ---
+        function generateLevel(levelNum) {
+            const random = new SeededRandom(levelNum);
+            const levelConf = levelConfigs[levelNum - 1];
+            config.levelWidth = levelConf.width;
+            
+            platforms = [];
+            gems = [];
+            enemies = [];
+
+            const maxJumpHeight = 150;
+            const maxJumpWidth = 220;
+
+            const startPlatform = { x: 0, y: 550, width: 300, height: 50 };
+            platforms.push(startPlatform);
+
+            let platformFrontier = [startPlatform];
+            let currentX = startPlatform.width;
+
+            while (currentX < config.levelWidth) {
+                const gap = 50 + random.next() * 23;
+                currentX += gap;
+                const platformWidth = 250 + random.next() * 400;
+                const newGroundPlatform = { x: currentX, y: 550, width: platformWidth, height: 50 };
+                platforms.push(newGroundPlatform);
+                platformFrontier.push(newGroundPlatform);
+                currentX += platformWidth;
+            }
+
+            const possibleY = [450, 350, 250];
+            const possibleWidths = [100, 150, 200, 250];
+            let placedFloaters = 0;
+            let generationTries = 0;
+
+            while (placedFloaters < levelConf.floaters && generationTries < 500) {
+                generationTries++;
+                const basePlatform = platformFrontier[Math.floor(random.next() * platformFrontier.length)];
+                const pWidth = possibleWidths[Math.floor(random.next() * possibleWidths.length)];
+                const pY = basePlatform.y - (50 + random.next() * (maxJumpHeight - 50));
+                const targetY = possibleY.reduce((prev, curr) => (Math.abs(curr - pY) < Math.abs(prev - pY) ? curr : prev));
+                const direction = random.next() < 0.5 ? -1 : 1;
+                const xOffset = (pWidth / 2) + random.next() * (maxJumpWidth - pWidth);
+                const pX = (basePlatform.x + basePlatform.width / 2) + (direction * xOffset);
+                const candidatePlatform = { x: Math.floor(pX / 50) * 50, y: targetY, width: pWidth, height: 20 };
+
+                let overlaps = false;
+                for (const p of platforms) {
+                    if (checkCollision({ x: candidatePlatform.x - 20, y: candidatePlatform.y - 20, width: candidatePlatform.width + 40, height: candidatePlatform.height + 40 }, p)) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if (!overlaps && candidatePlatform.x > 0 && candidatePlatform.x + candidatePlatform.width < config.levelWidth) {
+                    platforms.push(candidatePlatform);
+                    platformFrontier.push(candidatePlatform);
+                    placedFloaters++;
+                }
+            }
+
+
+            // Generate gems
+            for (let i = 0; i < levelConf.gems; i++) {
+                if (platforms.length === 0) break;
+                const placementType = random.next();
+                const type = random.next() < 0.2 ? 'blue' : 'yellow';
+                let placed = false;
+                let tries = 0;
+
+                while (!placed && tries < 50) {
+                    tries++;
+                    if (placementType < 0.4) {
+                        const p = platforms[Math.floor(random.next() * platforms.length)];
+                        gems.push({ x: p.x + p.width / 2 - 10, y: p.y - 40, width: 20, height: 20, angle: 0, collected: false, type: type });
+                        placed = true;
+                    } else if (placementType < 0.7) {
+                        const p = platforms[Math.floor(random.next() * platforms.length)];
+                        const side = random.next() < 0.5 ? 'left' : 'right';
+                        gems.push({ x: (side === 'left') ? p.x - 40 : p.x + p.width + 20, y: p.y - 20, width: 20, height: 20, angle: 0, collected: false, type: type });
+                        placed = true;
+                    } else {
+                        const p1 = platforms[Math.floor(random.next() * platforms.length)];
+                        const p2 = platforms[Math.floor(random.next() * platforms.length)];
+                        if (p1 !== p2 && Math.abs(p1.y - p2.y) < 100) {
+                            const [leftP, rightP] = p1.x < p2.x ? [p1, p2] : [p2, p1];
+                            const gap = rightP.x - (leftP.x + leftP.width);
+                            if (gap > 50 && gap < 220) {
+                                gems.push({ x: (leftP.x + leftP.width) + gap / 2 - 10, y: Math.min(p1.y, p2.y) - 80, width: 20, height: 20, angle: 0, collected: false, type: type });
+                                placed = true;
+                            }
+                        }
+                    }
+                }
+                if (!placed) i--;
+            }
+
+            // Generate enemies
+            const groundPlatforms = platforms.filter(p => p.y === 550 && p.width > 250);
+            for (let i = 0; i < levelConf.enemies; i++) {
+                if (groundPlatforms.length === 0) break;
+                const p = groundPlatforms[Math.floor(random.next() * groundPlatforms.length)];
+                const patrolRange = 100 + random.next() * 100;
+                const startX = p.x + random.next() * (p.width - patrolRange);
+                enemies.push({ x: startX, y: 510, width: 40, height: 40, direction: 1, startX: startX, range: patrolRange });
+            }
+
+            // Place door
+            door = { x: config.levelWidth - 150, y: 450, width: 60, height: 100 };
+            platforms.push({x: config.levelWidth - 200, y: 550, width: 200, height: 50});
+        }
+
+        // --- Game Initialization ---
+        function init(level) {
+            currentLevel = level;
+            gameActive = true;
+            messageBox.style.display = 'none';
+            
+            if (level === 1) {
+                score = 0;
+            }
+            scoreEl.textContent = `Score: ${score}`;
+            levelIndicatorEl.textContent = `Level: ${currentLevel}`;
+            
+            player = {
+                x: 100, y: 400, width: config.playerWidth, height: config.playerHeight,
+                dx: 0, dy: 0, onGround: false, direction: 1, ammo: 10
+            };
+            ammoIndicatorEl.textContent = `Ammo: ${player.ammo}`;
+            bullets = [];
+
+            generateLevel(currentLevel);
+
+            camera.x = 0;
+            
+            if (!gameLoopId) {
+                gameLoop();
+            }
+        }
+
+        // --- Input Handling ---
+        function handleKeyDown(e) {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+            if (e.key === 'ArrowUp') keys.up = true;
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                if (!keys.space) { // Fire only on key down, not hold
+                    shoot();
+                }
+                keys.space = true;
+            }
+        }
+        function handleKeyUp(e) {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+            if (e.key === 'ArrowUp') keys.up = false;
+            if (e.key === ' ' || e.key === 'Spacebar') keys.space = false;
+        }
+
+        function shoot() {
+            if (player.ammo > 0) {
+                player.ammo--;
+                ammoIndicatorEl.textContent = `Ammo: ${player.ammo}`;
+                bullets.push({
+                    x: player.x + (player.direction === 1 ? player.width : -10),
+                    y: player.y + player.height / 2 - 5,
+                    width: 10,
+                    height: 10,
+                    direction: player.direction
+                });
+            }
+        }
+
+        // --- Game Logic Update ---
+        function update() {
+            if (!gameActive) return;
+
+            // Player Movement
+            player.dx = 0;
+            if (keys.left) { player.dx = -config.playerSpeed; player.direction = -1; }
+            if (keys.right) { player.dx = config.playerSpeed; player.direction = 1; }
+            if (keys.up && player.onGround) { player.dy = -config.jumpForce; player.onGround = false; }
+            player.dy += config.gravity;
+
+            // Collision Detection
+            player.onGround = false;
+            let nextX = player.x + player.dx;
+            let nextY = player.y + player.dy;
+
+            platforms.forEach(p => {
+                if (nextX < p.x + p.width && nextX + player.width > p.x && player.y < p.y + p.height && player.y + player.height > p.y) { nextX = player.x; }
+                if (player.x < p.x + p.width && player.x + player.width > p.x && nextY < p.y + p.height && nextY + player.height > p.y) {
+                    if (player.dy > 0 && player.y + player.height <= p.y) { nextY = p.y - player.height; player.dy = 0; player.onGround = true; } 
+                    else if (player.dy < 0 && player.y >= p.y + p.height) { nextY = p.y + p.height; player.dy = 0; }
+                }
+            });
+            player.x = nextX;
+            player.y = nextY;
+
+            // World Boundaries
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > config.levelWidth) player.x = config.levelWidth - player.width;
+            if (player.y > canvas.height) {
+                showMessage("You fell!", false);
+            }
+            
+            // Gem Collection
+            gems.forEach(gem => {
+                if (!gem.collected && checkCollision(player, gem)) {
+                    gem.collected = true;
+                    score += (gem.type === 'blue' ? 20 : 10);
+                    scoreEl.textContent = `Score: ${score}`;
+                }
+            });
+
+            // Bullet Movement & Collision
+            // Iterate backwards for safe removal from arrays during loops.
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.x += config.bulletSpeed * bullet.direction;
+                
+                let bulletRemoved = false;
+
+                // Check collision with enemies
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    if (checkCollision(bullet, enemy)) {
+                        enemies.splice(j, 1); // Remove enemy
+                        bullets.splice(i, 1); // Remove bullet
+                        bulletRemoved = true;
+
+                        // Add 5 points for defeating the enemy
+                        score += 5;
+                        scoreEl.textContent = `Score: ${score}`;
+                        
+                        break; // Exit enemy loop since bullet is gone
+                    }
+                }
+
+                if (bulletRemoved) {
+                    continue; // Skip to the next bullet in the outer loop
+                }
+
+                // Remove bullets that go off-screen
+                if (bullet.x > camera.x + canvas.width || bullet.x < camera.x) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+
+            // Enemy Movement & Collision
+            enemies.forEach(enemy => {
+                let enemyCanMove = true;
+                const enemyMoveAmount = config.enemySpeed * enemy.direction;
+                const nextEnemyX = enemy.x + enemyMoveAmount;
+                const nextEnemyBox = { ...enemy, x: nextEnemyX };
+                if (checkCollision(player, nextEnemyBox)) {
+                    const nextPlayerBox = { ...player, x: player.x + enemyMoveAmount };
+                    let playerIsBlocked = false;
+                    for (const p of platforms) { if (checkCollision(nextPlayerBox, p)) { playerIsBlocked = true; break; } }
+                    if (playerIsBlocked) { enemyCanMove = false; } else { player.x += enemyMoveAmount; }
+                }
+                if (enemyCanMove) { enemy.x = nextEnemyX; }
+                if (enemy.x < enemy.startX || enemy.x > enemy.startX + enemy.range) { enemy.direction *= -1; }
+            });
+            
+            // Camera Update
+            camera.x = player.x - canvas.width / 2 + player.width / 2;
+            if (camera.x < 0) camera.x = 0;
+            if (camera.x > config.levelWidth - canvas.width) camera.x = config.levelWidth - canvas.width;
+
+            // Check for Win Condition (Reaching the Door)
+            if (checkCollision(player, door)) {
+                if (currentLevel < config.maxLevels) {
+                    showMessage(`Level ${currentLevel} Complete!`, true);
+                } else {
+                    showMessage("You beat the game! Final Score: " + score, false, true);
+                }
+            }
+        }
+        
+        function checkCollision(rect1, rect2) { return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y; }
+
+        function showMessage(message, isLevelEnd, gameWon = false) {
+            gameActive = false;
+            messageText.textContent = message;
+            messageBox.style.display = 'flex';
+            
+            nextLevelButton.style.display = isLevelEnd ? 'block' : 'none';
+
+            if (gameWon) {
+                restartButton.textContent = 'Restart Game';
+                restartButton.style.display = 'block';
+            } else if (isLevelEnd) {
+                restartButton.style.display = 'none';
+            } else {
+                restartButton.textContent = 'Restart Level';
+                restartButton.style.display = 'block';
+            }
+        }
+
+        // --- Drawing ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+            platforms.forEach(drawPlatform);
+            gems.forEach(gem => { if (!gem.collected) drawGem(gem); });
+            bullets.forEach(drawBullet);
+            enemies.forEach(drawEnemy);
+            drawDoor(door);
+            drawPlayer(player);
+            ctx.restore();
+        }
+
+        // --- Game Loop ---
+        let gameLoopId;
+        function gameLoop() {
+            update();
+            draw();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        
+        restartButton.addEventListener('click', () => {
+            if (restartButton.textContent === 'Restart Level') {
+                init(currentLevel);
+            } else {
+                init(1);
+            }
+        });
+
+        nextLevelButton.addEventListener('click', () => {
+            init(currentLevel + 1);
+        });
+
+        // --- Start Game ---
+        window.onload = function() {
+            init(1);
+        }
+    </script>
+</body>
+</html>
+
