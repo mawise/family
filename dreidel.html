@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Dreidel Spin</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a237e; /* Deep Blue */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Prevent pull-to-refresh on mobile */
+        }
+        
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #title {
+            margin-top: 40px;
+            color: #fff;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+
+        #message {
+            margin-bottom: 20%;
+            color: #ffeb3b; /* Yellow */
+            font-size: 1.5rem;
+            text-align: center;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px 30px;
+            border-radius: 15px;
+            transition: opacity 0.3s;
+            pointer-events: auto; /* Allow clicking text */
+            cursor: pointer;
+        }
+
+        .result-sub {
+            display: block;
+            font-size: 1rem;
+            color: #fff;
+            font-weight: normal;
+            margin-top: 5px;
+        }
+
+        #instruction {
+            position: absolute;
+            bottom: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        /* Shine effect for the title */
+        @keyframes shine {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+        #message.pulse {
+            animation: shine 1.5s infinite;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">Loading Dreidel...</div>
+
+    <div id="ui-container">
+        <div id="title">Hanukkah Dreidel</div>
+        <div id="message" class="pulse">Tap to Spin!</div>
+        <div id="instruction">Drag to rotate view • Tap to spin</div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const BACKGROUND_COLOR = 0x1a237e; // Deep blue
+        const DREIDEL_COLOR = 0xffffff;    // White/Silver body
+        const LETTER_COLOR = 0x1565c0;     // Blue letters
+        const BORDER_COLOR = 0xe3f2fd;     // Light blue borders
+        
+        // --- Game State ---
+        let state = {
+            spinning: false,
+            velocity: 0,
+            result: null,
+            targetRotation: 0
+        };
+
+        // --- Letter Definitions ---
+        // Maps face index to Hebrew Letter and Meaning
+        // We will determine face mapping based on UV/Geometry construction
+        const FACES = [
+            { letter: 'נ', name: 'Nun', meaning: 'Nisht (Nothing)' },
+            { letter: 'ג', name: 'Gimel', meaning: 'Gants (All)' },
+            { letter: 'ה', name: 'Hei', meaning: 'Halb (Half)' },
+            { letter: 'ש', name: 'Shin', meaning: 'Shtel (Put in)' }
+        ];
+
+        // --- Three.js Globals ---
+        let scene, camera, renderer;
+        let dreidelGroup, dreidelBody;
+        let particles = [];
+        
+        // --- Initialization ---
+        function init() {
+            const container = document.body;
+            document.getElementById('loading').style.display = 'none';
+
+            // 1. Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(BACKGROUND_COLOR);
+            scene.fog = new THREE.Fog(BACKGROUND_COLOR, 10, 30);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 5, 8);
+            camera.lookAt(0, 0, 0);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 4. Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 5);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            const spotLight = new THREE.SpotLight(0x4fc3f7, 0.5);
+            spotLight.position.set(-5, 5, 0);
+            spotLight.lookAt(0, 0, 0);
+            scene.add(spotLight);
+
+            // 5. Build Dreidel
+            createDreidel();
+
+            // 6. Build Floor
+            createFloor();
+
+            // 7. Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Interaction
+            const touchZone = document.body; // Full screen tap
+            
+            // Mouse
+            touchZone.addEventListener('mousedown', handleInputStart);
+            touchZone.addEventListener('mousemove', handleInputMove);
+            touchZone.addEventListener('mouseup', handleInputEnd);
+            
+            // Touch
+            touchZone.addEventListener('touchstart', handleInputStart, {passive: false});
+            touchZone.addEventListener('touchmove', handleInputMove, {passive: false});
+            touchZone.addEventListener('touchend', handleInputEnd);
+
+            // Animation Loop
+            animate();
+        }
+
+        // --- Texture Generation ---
+        function createTextTexture(letter) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Background
+            ctx.fillStyle = '#ffffff'; // White background for the sticker
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Border
+            ctx.strokeStyle = '#90caf9';
+            ctx.lineWidth = 20;
+            ctx.strokeRect(10, 10, 492, 492);
+
+            // Text
+            ctx.font = 'bold 300px serif'; // Serif for Hebrew looks better
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#0d47a1'; // Blue text
+            ctx.fillText(letter, 256, 256);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        // --- Dreidel Construction ---
+        function createDreidel() {
+            dreidelGroup = new THREE.Group();
+
+            // Materials
+            const bodyMatPlain = new THREE.MeshStandardMaterial({ 
+                color: DREIDEL_COLOR, 
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            
+            // Generate textures for the 4 sides
+            // Order in BoxGeometry materials: Right (+x), Left (-x), Top (+y), Bottom (-y), Front (+z), Back (-z)
+            // We want letters on: Right, Left, Front, Back
+            
+            const matNun = new THREE.MeshStandardMaterial({ map: createTextTexture(FACES[0].letter) }); // Right
+            const matGimel = new THREE.MeshStandardMaterial({ map: createTextTexture(FACES[1].letter) }); // Left
+            const matHei = new THREE.MeshStandardMaterial({ map: createTextTexture(FACES[2].letter) }); // Front
+            const matShin = new THREE.MeshStandardMaterial({ map: createTextTexture(FACES[3].letter) }); // Back
+
+            // Box Body
+            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+            // Three.js Material Index mapping: 0:Right, 1:Left, 2:Top, 3:Bottom, 4:Front, 5:Back
+            // FIXED: Swapped Nun and Gimel to match rotation logic (CCW rotation brings Left face to Front)
+            const boxMaterials = [
+                matGimel, // Right (+x) - was matNun
+                matNun,   // Left (-x)  - was matGimel
+                bodyMatPlain, // Top
+                bodyMatPlain, // Bottom
+                matHei,   // Front (+z)
+                matShin   // Back (-z)
+            ];
+            
+            dreidelBody = new THREE.Mesh(boxGeo, boxMaterials);
+            dreidelBody.castShadow = true;
+            dreidelBody.position.y = 1.5; // Lift up so tip is at roughly 0
+            dreidelGroup.add(dreidelBody);
+
+            // Handle (Cylinder)
+            const handleGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 32);
+            const handleMesh = new THREE.Mesh(handleGeo, bodyMatPlain);
+            handleMesh.position.y = 2.5 + 0.75; // Body Y + Half Body + Half Handle
+            handleMesh.castShadow = true;
+            dreidelGroup.add(handleMesh);
+
+            // Tip (Cone)
+            const tipGeo = new THREE.ConeGeometry(1, 1.5, 4); // 4 segments to match box corners look nice, or 32 for smooth
+            const tipMesh = new THREE.Mesh(tipGeo, bodyMatPlain);
+            // Rotate cone to point down? Cone points up by default. 
+            // We need to rotate it 180 on X or just position it.
+            // ConeGeometry creates a cone pointing up +Y.
+            tipMesh.rotation.x = Math.PI;
+            tipMesh.rotation.y = Math.PI / 4; // Align flat sides with box
+            tipMesh.position.y = 1.5 - 1 - 0.75; // BodyY - Half Body - Half Cone
+            tipMesh.castShadow = true;
+            dreidelGroup.add(tipMesh);
+
+            // Initial alignment
+            // Face 4 (Hei) is at +Z (Front). Camera is at +Z. So we see Hei initially.
+            
+            scene.add(dreidelGroup);
+        }
+
+        function createFloor() {
+            const geometry = new THREE.PlaneGeometry(50, 50);
+            const material = new THREE.ShadowMaterial({ opacity: 0.3 });
+            const plane = new THREE.Mesh(geometry, material);
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.y = -0.7; // Just below the tip
+            plane.receiveShadow = true;
+            scene.add(plane);
+        }
+
+        // --- Interaction Logic ---
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let dragVelocityX = 0;
+        let lastDragTime = 0;
+
+        function handleInputStart(e) {
+            e.preventDefault(); // Prevent text selection/scrolling
+            
+            // Check if we tapped the UI message
+            if (e.target.id === 'message') {
+                spinDreidel();
+                return;
+            }
+
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            previousMousePosition = { x: clientX };
+            dragVelocityX = 0;
+        }
+
+        function handleInputMove(e) {
+            if (!isDragging) return;
+            // If spinning, drag rotates camera or nothing. Let's make it rotate dreidel ONLY if idle.
+            // Actually, let's allow "Flicking" to spin.
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const deltaX = clientX - previousMousePosition.x;
+            
+            const now = performance.now();
+            const dt = now - lastDragTime;
+            lastDragTime = now;
+
+            if (state.spinning) {
+                // If spinning, maybe drag moves camera slightly?
+                // Let's keep it simple: Drag only works to spin if not already spinning fast?
+                // Or drag manually rotates the object if idle.
+            } else {
+                dreidelGroup.rotation.y += deltaX * 0.005;
+            }
+
+            dragVelocityX = deltaX; // Store velocity for throw
+            previousMousePosition = { x: clientX };
+        }
+
+        function handleInputEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            // Detect flick
+            if (!state.spinning && Math.abs(dragVelocityX) > 2) {
+                spinDreidel(dragVelocityX * 0.05); // Pass flick direction/speed
+            } else if (!state.spinning && Math.abs(dragVelocityX) <= 2) {
+                // Just a tap?
+                 const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+                 // If it was a very short static click, treat as tap
+                 spinDreidel();
+            }
+        }
+
+        function spinDreidel(forceSpeed) {
+            if (state.spinning && state.velocity > 0.1) return; // Already spinning fast
+
+            state.spinning = true;
+            // Random direction if clicked, specific if flicked
+            let dir = forceSpeed ? Math.sign(forceSpeed) : -1; 
+            // Base speed + random variation
+            state.velocity = dir * (0.3 + Math.random() * 0.2); 
+            if (forceSpeed) state.velocity = forceSpeed;
+            
+            // Cap velocity
+            if (state.velocity > 0.8) state.velocity = 0.8;
+            if (state.velocity < -0.8) state.velocity = -0.8;
+
+            updateUI("Spinning...");
+        }
+
+        function updateUI(text, subtext = "") {
+            const msgEl = document.getElementById('message');
+            msgEl.innerHTML = text + (subtext ? `<span class="result-sub">${subtext}</span>` : "");
+            
+            if (text === "Spinning...") {
+                msgEl.classList.remove('pulse');
+                msgEl.style.opacity = 0.7;
+            } else if (subtext) {
+                msgEl.classList.add('pulse');
+                msgEl.style.opacity = 1;
+            } else {
+                msgEl.classList.add('pulse');
+            }
+        }
+
+        // --- Physics & Animation ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Handle Spinning Physics
+            if (state.spinning) {
+                dreidelGroup.rotation.y += state.velocity;
+                
+                // Friction
+                state.velocity *= 0.985;
+
+                // Wobble effect based on velocity
+                // Tilt X and Z slightly using sin waves
+                const wobbleSpeed = performance.now() * 0.01;
+                const wobbleAmount = state.velocity * 0.5; 
+                dreidelGroup.rotation.x = Math.sin(wobbleSpeed) * wobbleAmount;
+                dreidelGroup.rotation.z = Math.cos(wobbleSpeed) * wobbleAmount;
+
+                // Stop condition
+                if (Math.abs(state.velocity) < 0.002) {
+                    state.spinning = false;
+                    state.velocity = 0;
+                    snapToFace();
+                }
+            } else {
+                // If not spinning, settle the wobble
+                dreidelGroup.rotation.x *= 0.9;
+                dreidelGroup.rotation.z *= 0.9;
+            }
+
+            // Snapping Animation (Tweening manually)
+            if (!state.spinning && state.isSnapping) {
+                // Lerp towards target
+                const diff = state.targetRotation - dreidelGroup.rotation.y;
+                dreidelGroup.rotation.y += diff * 0.1;
+                
+                if (Math.abs(diff) < 0.001) {
+                    dreidelGroup.rotation.y = state.targetRotation;
+                    state.isSnapping = false;
+                    determineResult();
+                }
+            }
+
+            // Bobbing motion for "floating" effect slightly
+            if (!state.spinning && !state.isSnapping) {
+                 dreidelGroup.position.y = Math.sin(performance.now() * 0.002) * 0.05;
+            } else {
+                dreidelGroup.position.y = 0; // Grounded when spinning
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function snapToFace() {
+            state.isSnapping = true;
+            
+            // Normalize current rotation to 0..2PI
+            let current = dreidelGroup.rotation.y % (Math.PI * 2);
+            if (current < 0) current += Math.PI * 2;
+
+            // Faces are at 0, PI/2, PI, 3PI/2.
+            // Find nearest multiple of PI/2
+            const step = Math.PI / 2;
+            const snapIndex = Math.round(current / step);
+            let target = snapIndex * step;
+
+            // Calculate actual target maintaining the rotation cycle count
+            // We want the closest target to the raw rotation value
+            const raw = dreidelGroup.rotation.y;
+            const remainder = raw % step;
+            
+            // Find closest step
+            if (Math.abs(remainder) < step / 2) {
+                state.targetRotation = raw - remainder;
+            } else {
+                state.targetRotation = raw + (step * Math.sign(raw)) - remainder; 
+            }
+        }
+
+        function determineResult() {
+            // Determine which face is pointing at camera (+Z)
+            // Camera looks at (0,0,0) from +Z. 
+            // The object rotates around Y.
+            // Initial State: 
+            // Right (+X) = Nun
+            // Left (-X) = Gimel
+            // Front (+Z) = Hei
+            // Back (-Z) = Shin
+
+            // We need to figure out what the rotation offset does.
+            // A rotation of +90 deg (PI/2) around Y moves Right face to Front.
+            // A rotation of -90 deg moves Left face to Front.
+            // A rotation of 180 moves Back face to Front.
+
+            // Normalize targetRotation to 0..360 (in degrees for easier brain math)
+            let deg = THREE.MathUtils.radToDeg(state.targetRotation) % 360;
+            if (deg < 0) deg += 360;
+            
+            // Allow small epsilon error
+            deg = Math.round(deg / 90) * 90;
+            if (deg === 360) deg = 0;
+
+            // Mapping:
+            // 0 deg   => Front was Hei, now stays Hei.
+            // 90 deg  => Rotated CCW (if Y is Up). Right (+X) moves to Front (+Z). Right is Nun.
+            // 180 deg => Back (-Z) moves to Front. Back is Shin.
+            // 270 deg => Left (-X) moves to Front. Left is Gimel.
+            
+            let resultIndex = -1;
+            
+            // Note: Three.js rotation positive is usually CCW around axis.
+            if (deg === 0) {
+                // Hei
+                resultIndex = 2;
+            } else if (deg === 90) {
+                // Nun
+                resultIndex = 0;
+            } else if (deg === 180) {
+                // Shin
+                resultIndex = 3;
+            } else if (deg === 270) {
+                // Gimel
+                resultIndex = 1;
+            }
+
+            const res = FACES[resultIndex];
+            if (res) {
+                updateUI(res.name + " (" + res.letter + ")", res.meaning);
+            } else {
+                updateUI("Spin Again");
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
