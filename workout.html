@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interval Workout Timer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: background-color 0.3s ease; /* Made transition snappier */
+            background-color: #f4f4f9; 
+            color: #333;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        h1 { margin-top: 0; }
+
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box; 
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            color: white;
+            background-color: #333;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover { background-color: #555; }
+        
+        #timer-display { display: none; }
+
+        .status-text {
+            font-size: 3rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .time-text {
+            font-size: 6rem;
+            font-weight: bold;
+            margin: 10px 0;
+            line-height: 1;
+        }
+
+        .set-text {
+            font-size: 1.5rem;
+            color: #555;
+        }
+
+        #reset-btn {
+            background-color: transparent;
+            color: #333;
+            border: 2px solid #333;
+            margin-top: 20px;
+        }
+
+        /* Colors */
+        body.work-mode { background-color: #4CAF50; } /* Green */
+        body.rest-mode { background-color: #2196F3; } /* Blue */
+        body.done-mode { background-color: #9C27B0; } /* Purple */
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="setup-screen">
+            <h1>Workout Setup</h1>
+            
+            <div class="input-group">
+                <label>Number of Sets (Reps)</label>
+                <input type="number" id="sets" value="5" min="1">
+            </div>
+
+            <div class="input-group">
+                <label>Work Time (seconds)</label>
+                <input type="number" id="work-time" value="30" min="1">
+            </div>
+
+            <div class="input-group">
+                <label>Rest Time (seconds)</label>
+                <input type="number" id="rest-time" value="10" min="0">
+            </div>
+
+            <button onclick="startWorkout()">Start Workout</button>
+        </div>
+
+        <div id="timer-display">
+            <div class="status-text" id="status-label">GO!</div>
+            <div class="time-text" id="time-left">0</div>
+            <div class="set-text" id="set-count">Set 1 / 5</div>
+            <button id="reset-btn" onclick="resetApp()">Stop / Reset</button>
+        </div>
+    </div>
+
+    <script>
+        let totalSets, workDuration, restDuration;
+        let currentSet = 1;
+        let currentTime = 0;
+        let isWorking = true; 
+        let timerInterval = null;
+
+        const body = document.body;
+        const setupScreen = document.getElementById('setup-screen');
+        const timerDisplay = document.getElementById('timer-display');
+        const statusLabel = document.getElementById('status-label');
+        const timeLeft = document.getElementById('time-left');
+        const setCount = document.getElementById('set-count');
+
+        function startWorkout() {
+            totalSets = parseInt(document.getElementById('sets').value);
+            workDuration = parseInt(document.getElementById('work-time').value);
+            restDuration = parseInt(document.getElementById('rest-time').value);
+
+            if (!totalSets || !workDuration) {
+                alert("Please enter valid numbers");
+                return;
+            }
+
+            setupScreen.style.display = 'none';
+            timerDisplay.style.display = 'block';
+
+            currentSet = 1;
+            startWorkPhase();
+        }
+
+        function startWorkPhase() {
+            isWorking = true;
+            currentTime = workDuration;
+            
+            body.className = 'work-mode';
+            statusLabel.innerText = "WORK";
+            // statusLabel.style.color = "#fff"; 
+            updateDisplay();
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(tick, 1000);
+        }
+
+        function startRestPhase() {
+            isWorking = false;
+            currentTime = restDuration;
+
+            body.className = 'rest-mode';
+            statusLabel.innerText = "REST";
+            updateDisplay();
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(tick, 1000);
+        }
+
+        function tick() {
+            currentTime--;
+            
+            // FIX: Check if we hit zero immediately
+            if (currentTime <= 0) {
+                handlePhaseSwitch();
+            } else {
+                updateDisplay();
+            }
+        }
+
+        function handlePhaseSwitch() {
+            clearInterval(timerInterval); 
+
+            if (isWorking) {
+                // Work just finished
+                if (currentSet < totalSets) {
+                    startRestPhase();
+                } else {
+                    finishWorkout();
+                }
+            } else {
+                // Rest just finished
+                currentSet++;
+                startWorkPhase();
+            }
+        }
+
+        function updateDisplay() {
+            timeLeft.innerText = currentTime;
+            setCount.innerText = `Set ${currentSet} / ${totalSets}`;
+        }
+
+        function finishWorkout() {
+            body.className = 'done-mode';
+            statusLabel.innerText = "DONE!";
+            timeLeft.innerText = "✓";
+            setCount.innerText = "Great Job";
+        }
+
+        function resetApp() {
+            clearInterval(timerInterval);
+            body.className = ''; 
+            setupScreen.style.display = 'block';
+            timerDisplay.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
