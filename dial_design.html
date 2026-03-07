@@ -1,0 +1,420 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Download, Settings, Type, Palette, Circle } from 'lucide-react';
+
+export default function App() {
+  const canvasRef = useRef(null);
+
+  // App State
+  const [hourSettings, setHourSettings] = useState({
+    radius: 300,
+    size: 60,
+    font: 'serif',
+    customFontName: null,
+    useWatchmakersFour: true, // IIII instead of IV
+    rotateText: false,
+    letterSpacing: 0,
+  });
+
+  const [brandSettings, setBrandSettings] = useState({
+    text: 'CHRONOS',
+    yPos: 240,
+    size: 45,
+    font: 'sans-serif',
+    customFontName: null,
+  });
+
+  const [modelSettings, setModelSettings] = useState({
+    text: 'AUTOMATIC',
+    yPos: 560,
+    size: 20,
+    font: 'sans-serif',
+    customFontName: null,
+  });
+
+  const [faceSettings, setFaceSettings] = useState({
+    bgColor: '#ffffff',
+    textColor: '#1a1a1a',
+    accentColor: '#e5e5e5',
+    showHourMarks: true,
+    showMinuteMarks: true,
+  });
+
+  // Fixed high-res canvas size
+  const LOGICAL_SIZE = 800;
+  const RENDER_SIZE = 3000;
+  const SCALE = RENDER_SIZE / LOGICAL_SIZE;
+  const CENTER = LOGICAL_SIZE / 2;
+
+  // Handle Font Uploads
+  const handleFontUpload = async (e, section) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const fontName = `CustomFont_${section}_${Date.now()}`;
+      const buffer = await file.arrayBuffer();
+      const fontFace = new FontFace(fontName, buffer);
+      
+      await fontFace.load();
+      document.fonts.add(fontFace);
+
+      if (section === 'hour') {
+        setHourSettings(prev => ({ ...prev, font: fontName, customFontName: file.name }));
+      } else if (section === 'brand') {
+        setBrandSettings(prev => ({ ...prev, font: fontName, customFontName: file.name }));
+      } else if (section === 'model') {
+        setModelSettings(prev => ({ ...prev, font: fontName, customFontName: file.name }));
+      }
+    } catch (err) {
+      console.error("Error loading font:", err);
+      alert("Failed to load font. Please ensure it's a valid TTF, OTF, or WOFF file.");
+    }
+  };
+
+  // Draw the watch face
+  const drawWatchFace = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Clear and draw background based on high-res size
+    ctx.clearRect(0, 0, RENDER_SIZE, RENDER_SIZE);
+    
+    // Scale the context so our 800px logical math scales up perfectly
+    ctx.save();
+    ctx.scale(SCALE, SCALE);
+    
+    // Draw Dial Base
+    ctx.fillStyle = faceSettings.bgColor;
+    ctx.beginPath();
+    ctx.arc(CENTER, CENTER, LOGICAL_SIZE / 2 - 10, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Draw Bezel / Edge
+    ctx.strokeStyle = faceSettings.accentColor;
+    ctx.lineWidth = 15;
+    ctx.stroke();
+
+    // Tick Marks
+    ctx.strokeStyle = faceSettings.textColor;
+    for (let i = 0; i < 60; i++) {
+      const isHour = i % 5 === 0;
+      
+      // Skip drawing if the specific mark type is disabled
+      if (isHour && !faceSettings.showHourMarks) continue;
+      if (!isHour && !faceSettings.showMinuteMarks) continue;
+
+      const angle = (i * Math.PI / 30) - Math.PI / 2;
+      const innerRadius = isHour ? LOGICAL_SIZE / 2 - 40 : LOGICAL_SIZE / 2 - 25;
+      const outerRadius = LOGICAL_SIZE / 2 - 15;
+
+      ctx.lineWidth = isHour ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(CENTER + innerRadius * Math.cos(angle), CENTER + innerRadius * Math.sin(angle));
+      ctx.lineTo(CENTER + outerRadius * Math.cos(angle), CENTER + outerRadius * Math.sin(angle));
+      ctx.stroke();
+    }
+
+    // Draw Hour Markings (Roman Numerals)
+    ctx.fillStyle = faceSettings.textColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${hourSettings.size}px "${hourSettings.font}"`;
+    ctx.letterSpacing = `${hourSettings.letterSpacing}px`;
+
+    const numerals = ['I', 'II', 'III', hourSettings.useWatchmakersFour ? 'IIII' : 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    
+    numerals.forEach((num, index) => {
+      const hour = index + 1;
+      const angle = (hour * Math.PI / 6) - Math.PI / 2;
+      const x = CENTER + hourSettings.radius * Math.cos(angle);
+      const y = CENTER + hourSettings.radius * Math.sin(angle);
+      
+      // Canvas textAlign 'center' includes the trailing letter spacing in its width calculation,
+      // which offsets the visual center. We compensate by shifting by half the spacing distance.
+      const spacingCorrection = hourSettings.letterSpacing / 2;
+
+      if (hourSettings.rotateText) {
+        ctx.save();
+        ctx.translate(x, y);
+        // Rotate text radially (bottom of text points to the center)
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillText(num, spacingCorrection, 0);
+        ctx.restore();
+      } else {
+        ctx.fillText(num, x + spacingCorrection, y);
+      }
+    });
+
+    // Reset letter spacing for subsequent text
+    ctx.letterSpacing = '0px';
+
+    // Draw Brand Text
+    ctx.font = `bold ${brandSettings.size}px "${brandSettings.font}"`;
+    ctx.fillText(brandSettings.text, CENTER, brandSettings.yPos);
+
+    // Draw Model Text
+    ctx.font = `${modelSettings.size}px "${modelSettings.font}"`;
+    ctx.fillText(modelSettings.text, CENTER, modelSettings.yPos);
+    
+    // Restore context to prevent compound scaling on next frame
+    ctx.restore();
+  };
+
+  // Redraw when settings change
+  useEffect(() => {
+    // Ensure fonts are ready before drawing
+    document.fonts.ready.then(() => {
+      drawWatchFace();
+    });
+  }, [hourSettings, brandSettings, modelSettings, faceSettings]);
+
+  // Export Canvas
+  const downloadImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = 'custom-watch-face.png';
+    link.href = dataUrl;
+    link.click();
+  };
+
+  // Reusable File Input Component
+  const FontUploader = ({ section, currentFontName }) => (
+    <div className="mt-2">
+      <input
+        type="file"
+        accept=".ttf,.otf,.woff,.woff2"
+        id={`font-upload-${section}`}
+        className="hidden"
+        onChange={(e) => handleFontUpload(e, section)}
+      />
+      <label
+        htmlFor={`font-upload-${section}`}
+        className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+      >
+        <Upload className="w-4 h-4 mr-2" />
+        {currentFontName ? currentFontName : 'Upload Custom Font'}
+      </label>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans text-gray-900">
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
+        
+        {/* Left Column - Controls */}
+        <div className="w-full lg:w-1/3 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h1 className="text-2xl font-bold flex items-center mb-6">
+              <Circle className="w-6 h-6 mr-2 text-blue-600" />
+              Dial Designer
+            </h1>
+
+            {/* Hour Markings Settings */}
+            <div className="space-y-4 mb-8">
+              <h2 className="text-lg font-semibold flex items-center border-b pb-2">
+                <Circle className="w-5 h-5 mr-2 text-gray-500" />
+                Hour Markings
+              </h2>
+              
+              <FontUploader section="hour" currentFontName={hourSettings.customFontName} />
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Placement Radius ({hourSettings.radius}px)</label>
+                <input 
+                  type="range" min="100" max="350" value={hourSettings.radius}
+                  onChange={(e) => setHourSettings({...hourSettings, radius: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Text Size ({hourSettings.size}px)</label>
+                <input 
+                  type="range" min="20" max="120" value={hourSettings.size}
+                  onChange={(e) => setHourSettings({...hourSettings, size: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Letter Spacing ({hourSettings.letterSpacing}px)</label>
+                <input 
+                  type="range" min="-20" max="50" value={hourSettings.letterSpacing}
+                  onChange={(e) => setHourSettings({...hourSettings, letterSpacing: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input 
+                  type="checkbox" id="watchmakersFour"
+                  checked={hourSettings.useWatchmakersFour}
+                  onChange={(e) => setHourSettings({...hourSettings, useWatchmakersFour: e.target.checked})}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mr-2"
+                />
+                <label htmlFor="watchmakersFour" className="text-sm font-medium">Use "Watchmaker's Four" (IIII)</label>
+              </div>
+
+              <div className="flex items-center mt-2">
+                <input 
+                  type="checkbox" id="rotateText"
+                  checked={hourSettings.rotateText}
+                  onChange={(e) => setHourSettings({...hourSettings, rotateText: e.target.checked})}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mr-2"
+                />
+                <label htmlFor="rotateText" className="text-sm font-medium">Rotate Text Radially</label>
+              </div>
+            </div>
+
+            {/* Brand Settings */}
+            <div className="space-y-4 mb-8">
+              <h2 className="text-lg font-semibold flex items-center border-b pb-2">
+                <Type className="w-5 h-5 mr-2 text-gray-500" />
+                Brand Name
+              </h2>
+              
+              <input 
+                type="text" value={brandSettings.text}
+                onChange={(e) => setBrandSettings({...brandSettings, text: e.target.value})}
+                placeholder="Brand Name"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+
+              <FontUploader section="brand" currentFontName={brandSettings.customFontName} />
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Vertical Position</label>
+                <input 
+                  type="range" min="100" max="700" value={brandSettings.yPos}
+                  onChange={(e) => setBrandSettings({...brandSettings, yPos: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Text Size ({brandSettings.size}px)</label>
+                <input 
+                  type="range" min="10" max="100" value={brandSettings.size}
+                  onChange={(e) => setBrandSettings({...brandSettings, size: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+            </div>
+
+            {/* Model Settings */}
+            <div className="space-y-4 mb-8">
+              <h2 className="text-lg font-semibold flex items-center border-b pb-2">
+                <Settings className="w-5 h-5 mr-2 text-gray-500" />
+                Model Details
+              </h2>
+              
+              <input 
+                type="text" value={modelSettings.text}
+                onChange={(e) => setModelSettings({...modelSettings, text: e.target.value})}
+                placeholder="Model / Specs"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+
+              <FontUploader section="model" currentFontName={modelSettings.customFontName} />
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Vertical Position</label>
+                <input 
+                  type="range" min="100" max="700" value={modelSettings.yPos}
+                  onChange={(e) => setModelSettings({...modelSettings, yPos: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Text Size ({modelSettings.size}px)</label>
+                <input 
+                  type="range" min="10" max="80" value={modelSettings.size}
+                  onChange={(e) => setModelSettings({...modelSettings, size: Number(e.target.value)})}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+            </div>
+
+            {/* Colors & Track */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold flex items-center border-b pb-2">
+                <Palette className="w-5 h-5 mr-2 text-gray-500" />
+                Face & Track
+              </h2>
+              
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">Dial Color</label>
+                  <input 
+                    type="color" value={faceSettings.bgColor}
+                    onChange={(e) => setFaceSettings({...faceSettings, bgColor: e.target.value})}
+                    className="w-full h-10 rounded cursor-pointer"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">Text Color</label>
+                  <input 
+                    type="color" value={faceSettings.textColor}
+                    onChange={(e) => setFaceSettings({...faceSettings, textColor: e.target.value})}
+                    className="w-full h-10 rounded cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-4">
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox" id="showHourMarks"
+                    checked={faceSettings.showHourMarks}
+                    onChange={(e) => setFaceSettings({...faceSettings, showHourMarks: e.target.checked})}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mr-2"
+                  />
+                  <label htmlFor="showHourMarks" className="text-sm font-medium">Show Hour Tick Marks</label>
+                </div>
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox" id="showMinuteMarks"
+                    checked={faceSettings.showMinuteMarks}
+                    onChange={(e) => setFaceSettings({...faceSettings, showMinuteMarks: e.target.checked})}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mr-2"
+                  />
+                  <label htmlFor="showMinuteMarks" className="text-sm font-medium">Show Minute Tick Marks</label>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Right Column - Preview Canvas */}
+        <div className="w-full lg:w-2/3 flex flex-col items-center">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 w-full flex flex-col items-center justify-center sticky top-8">
+            <div className="w-full max-w-[600px] aspect-square relative bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center border border-gray-100 shadow-inner">
+              <canvas 
+                ref={canvasRef} 
+                width={RENDER_SIZE} 
+                height={RENDER_SIZE}
+                className="w-full h-full object-contain"
+                style={{ maxWidth: '100%', maxHeight: '100%' }}
+              />
+            </div>
+            
+            <button 
+              onClick={downloadImage}
+              className="mt-6 flex items-center justify-center w-full max-w-sm px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all shadow-md hover:shadow-lg"
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Export High-Res Image
+            </button>
+            <p className="text-xs text-gray-500 mt-3">Exports as a 3000x3000 PNG image</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
