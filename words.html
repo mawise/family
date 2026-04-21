@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .word-chip {
+            transition: all 0.2s ease;
+        }
+        .word-chip:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-blue-100 min-h-screen text-slate-800 p-4 md:p-8">
+
+    <div class="max-w-3xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900 mb-2 tracking-tight">Word Unscrambler</h1>
+            <p class="text-slate-500">Enter your letters to find common 3-6 letter words.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="glass-panel rounded-2xl p-6 mb-8">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="relative flex-grow">
+                    <input type="text" id="letterInput" 
+                        class="w-full text-2xl font-bold tracking-widest uppercase p-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all placeholder:normal-case placeholder:tracking-normal placeholder:font-normal text-center md:text-left"
+                        placeholder="e.g. RSTLNE" 
+                        autocomplete="off">
+                    <div class="absolute right-4 top-1/2 transform -translate-y-1/2 text-xs text-slate-400 font-medium hidden md:block">
+                        PRESS ENTER
+                    </div>
+                </div>
+                <button onclick="findWords()" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-8 rounded-xl transition-colors shadow-lg shadow-indigo-200 active:scale-95">
+                    Find Words
+                </button>
+            </div>
+            
+            <div class="mt-4 flex items-center justify-between text-sm text-slate-500 px-1">
+                <span id="letterCount">0 letters entered</span>
+                <button onclick="clearInput()" class="text-indigo-600 hover:text-indigo-800 font-medium hover:underline">Clear</button>
+            </div>
+        </div>
+
+        <!-- Results Area -->
+        <div id="resultsArea" class="hidden space-y-6">
+            <!-- Stats -->
+            <div class="flex items-center justify-between bg-white/50 rounded-lg p-3 px-4 border border-slate-200/60">
+                <span class="font-medium text-slate-700">Found <span id="totalFound" class="text-indigo-600 font-bold">0</span> words</span>
+                <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Sorted by Length</span>
+            </div>
+
+            <!-- Grid Container -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Length 6 -->
+                <div id="group-6" class="hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">6</div>
+                        <h3 class="font-semibold text-slate-700">Letter Words</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 content-6"></div>
+                </div>
+
+                <!-- Length 5 -->
+                <div id="group-5" class="hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">5</div>
+                        <h3 class="font-semibold text-slate-700">Letter Words</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 content-5"></div>
+                </div>
+
+                <!-- Length 4 -->
+                <div id="group-4" class="hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-sm">4</div>
+                        <h3 class="font-semibold text-slate-700">Letter Words</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 content-4"></div>
+                </div>
+
+                <!-- Length 3 -->
+                <div id="group-3" class="hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">3</div>
+                        <h3 class="font-semibold text-slate-700">Letter Words</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 content-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-12">
+            <div class="text-6xl mb-4">🤔</div>
+            <h3 class="text-xl font-semibold text-slate-800 mb-2">No words found</h3>
+            <p class="text-slate-500">Try adding more vowels or common consonants.</p>
+        </div>
+    </div>
+
+    <script>
+        // A curated list of common English words (3-6 letters)
+        // This is a compressed approach to avoid a huge file, but extensive enough for casual usage.
+        const dictionaryRaw = `
+        the and for are but not you all any can had has him his one our out say she too use who dad mom
+        boy car cat day dog eye fan fun gas guy hat ink job joy key kid law let man oil pan pay pie
+        pig put ran run sad saw sea set sit son sun tax tea ten toe top toy two war way win yes zoo
+        act add age ago aid aim air arm art ash ask awe bad bag ban bar bat bay bed bee beg bet bid
+        big bin bit bog bow box bud bug bun bus buy cap cop cot cow cry cup cut dam die dig dim dip
+        dry due dug ear eat egg ego end era err eve far fat fee few fit fix fly fog fox fry gap gel
+        gem get gig gin god got gum gun gut gym ham hay hem hen her hey hid hip hit hoe hop hot hug
+        hum hut ice ill imp inn ion its jar jaw jet jig jog jug kit lab lad lag lap lay lid lie lip
+        log lot low mad map mat met mix mob mud mug nap net nil nod nor now nut oak oar oat odd off
+        old owl own pad pal pat paw pen pet pin pit pod pop pot pro pry pub pun pup rag ram rap rat
+        raw ray red rib rid rig rim rip rob rod rot row rub rug rum rut sap sat sex shy sin sip sir
+        six ski sky sly sob sod sop sow soy spa spy sub sue sum tab tag tan tap tar tip ton tow tub
+        tug urn van vet via vow wag wax web wed wet wig wit woe won wow wry yak yam yet zip
+        able acid aged also area army away baby back bad ball band bank base bath bear beat been beer
+        bell belt bend best bike bill bird blow blue boat body bond bone book boom born boss both bowl
+        bulk burn bush busy cake call calm camp card care case cash cast cell chat chef chip city club
+        coal coat code cold come cook cool copy core corn cost crew crop dark data date dawn dead deal
+        dear debt deck deep deer deny desk dial diet dirt disc dish disk door dose down drag draw drop
+        drug drum duck dust duty each earn ease east easy edge edit else envy even ever evil exam exit
+        face fact fade fail fair fall farm fast fate fear feed feel feet fell felt file fill film find
+        fine fire firm fish fist five flag flat flaw flee flew flip flow foam folk food foot ford fork
+        form fort four free frog from fuel full fund gain game gang gap gate gear gene gift girl give
+        glad goal goat gold golf gone good grab gray grew grey grid grin grip grow hair half hall hand
+        hang hard hate have head heal hear heat held hell help here hero high hill hire hold hole holy
+        home hook hope horn hose host hour huge hung hunt hurt icon idea inch info iron item jack jail
+        jazz join joke jump jury just keep kept kick kill kind king kiss knee knew knit know lack lady
+        lake lamp land lane last late lava lawn lead leaf lean leap left legs lend lens less lift like
+        line link lion list live load loan lock long look loop lord lose loss lost loud love luck lung
+        made mail main make male mall many mark mask mass mate math meal mean meat meet melt menu mess
+        metal mice mile milk mill mind mine miss mist mode mood moon more most move much must name near
+        neck need news next nice nine none nose note noun null numb okay once only onto open oral over
+        pace pack page pain pair palm park part pass past path peak pear pile pill pine pink pint pipe
+        plan play plot plug plus poem poet poll pond pool poor port pose post pour pray pull pump pure
+        push quit race rail rain rank rare rate read real rear rely rent rest rice rich ride ring rise
+        risk road roar rock role roll roof room root rope rose rule rush rust safe said sail sake sale
+        salt same sand save scan scar seat seed seek seem seen self sell send sent sexy shad ship shoe
+        shop shot show shut sick side sign silk sing sink site size skin skip slab slip slow snap snow
+        soap soft soil sold sole solo some song soon sort soul soup sour span spin spit spot star stay
+        step stop such suit sure swim tail take tale talk tall tank tape task team tear tell tent term
+        test text than that them then thin this tide tidy tied tile till tilt time tiny tire title told
+        tone took tool tour town trap tree trip true tube tune turn twin type unit upon urge user vary
+        vast very vest view vote wage wait wake walk wall want ward warm warn wash wave weak wear weed
+        week weep well went were west what when wide wife wild will wind wine wing wire wish with wolf
+        wood wool word work worn wrap yard year yell zero zone
+        about above abuse actor acute admit adopt adult after again agent agree ahead alarm album alert
+        alike alive allow alone along alter among anger angle angry ankle apart apple apply arena argue
+        arise array arrow aside asset audio audit avoid award aware badly baker basis basic beach began
+        begin begun being below bench berry birth black blade blame blank blast blend bless blind block
+        blood board boast brain brake brand brass brave bread break brick bride brief bring broad broke
+        brown brush build built bunch burst buyer cabin cable candy cause chain chair chart chase cheap
+        check chest chief child chill china chips chord chose civil claim class clean clear climb clock
+        close cloth cloud coach coast color comes count court cover crack craft crash crazy cream creek
+        crime cross crowd crown crude cruel crush crust curve cycle daily dance dated dealt death debut
+        delay depth devil diary dirty disco doing donor doubt dozen draft drain drama drawn dream dress
+        drink drive drove drunk dying eager early earth eight elbow elder elect elite empty enemy enjoy
+        enter entry equal error event every exact exist extra faith false fault favor fence fever fiber
+        field fifty fight final first flame flash fleet flesh float flood floor flour fluid focus force
+        forth forty forum found frame frank fraud fresh front fruit fully funny giant glass globe glory
+        going grace grade grain grand grant grass grave great green greet grief gross group grown guard
+        guess guest guide habit hairy hands happy harsh haven heart heavy hedge hello hence hobby horse
+        hotel house human humor hurry ideal image imply index inner input issue joint judge juice jumpy
+        laser later laugh layer learn lease least leave legal lemon level light limit lined liner local
+        logic loose lorry loser lover lower loyal lucky lunch magic major maker march marry match maybe
+        mayor meant medal media merit metal meter micro might miles minor minus mixed model modem moist
+        money month moral motor mount mouse mouth movie music naked nasty naval needs nerve never newly
+        night noise north novel nurse occur ocean offer often older olive onion onset opera orbit order
+        organ other ought ounce outer owner paint panel panic paper party patch pause peace phase phone
+        photo piano piece pilot pitch pizza place plain plane plant plate plays plead point polar porch
+        pound power press price pride prime print prior prize proof proud prove pulse punch pupil purse
+        queen query quest quick quiet quite quota quote radio raise rally range rapid ratio reach react
+        ready realm rebel refer reign relax relay reply reset retro rider ridge rifle right rigid river
+        robot rocks rocky roger roles roots rough round route royal ruler rural sadly salad sales sauce
+        scale scare scene scent scope score scout scrap screw script serve seven shade shaft shake shall
+        shame shape share sharp sheep sheer sheet shelf shell shift shine shirt shock shoot shore short
+        shout shown sight silly since sixth skill skirt skull sleep slide slice slope small smart smell
+        smile smoke snack snake solid solve sorry sound south space spare speak speed spell spend spill
+        spine spite split spoke spoon sport spray squad stack staff stage stain stair stake stamp stand
+        stare stark start state steak steal steam steel steep steer stick stiff still stock stone stood
+        store storm story strip stuck study stuff style sugar suite super sweet swept swift swing sword
+        table taken takes taste teach teams teeth tells tenth thank theft their theme there these thick
+        thief thigh thing think third those three threw throw thumb tiger tight tiles timer title toast
+        today token tonal topic total touch tough tower track trade trail train trait treat trend trial
+        tribe trick tried truck truly trunk trust truth tubes tutor twice twist uncle under union unity
+        until upper upset urban usage usual vague valid value valve vapor video virus visit vital voice
+        voter wagon waist waste watch water waves weary weigh weird whale wheat wheel where which while
+        white whole whose widow width winds wings winner wired wires woman women woods world worry worse
+        worst worth would wound wrist write wrong wrote yield young youth yours
+        abroad accept access accuse across acting action active actual adjust advice advise afford afraid
+        agency agenda agents almost always amount anchor animal annual answer anyone anyway appeal appear
+        argued arrive artist asleep aspect assert assess assist assume assure asthma attach attack attend
+        august author avenue backed backup ballet banana banker banner barely barrel basket battle beauty
+        became become before behalf behave behind belief belong beside better beyond bishop bitter blades
+        blamed boiler bolder border boring bottle bought bounce bounds branch brandy breath breeze bridge
+        bright brings broken bronze browse brutal bubble bucket budget buffer buffet bullet bundle burden
+        bureau burial burned burner button bypass camera campus cancel cancer candle canvas canyon carbon
+        career carpet carrot carton castle casual cattle caught center centre chance change charge charts
+        cheese cherry chicks choice choose chorus chosen church circle circus citizen claims clause clever
+        client clinic closed closer clothe clouds cloudy clutch coffee coffin collar colony combat comedy
+        coming common comply convey cooler copper corner costly cotton counts county couple coupon course
+        covers create credit crisis critic cruise crunch crying custom cutter damage danger dancer dealer
+        debate debris decade decent decide decree defeat defect defend define degree demand denial dental
+        depend deploy deputy desert design desire detail detect device differ digest dinner direct dishes
+        dismal doctor dollar domain donate donkey double doubts drawer dreams drinks driven driver drives
+        during eagles earned easier easily eating editor effect effort eighth either eleven emerge empire
+        employ ending endure energy engage engine enough ensure entire entity enzyme equals equity escape
+        estate ethics ethnic exceed except excess excite excuse exempt expand expect expert export expose
+        extend extent fabric factor failed fairly fallen family famous farmer father faults faulty favors
+        favour feeder fellow female fields fierce figure filing filled filler filter finger finish finite
+        fiscal fisher fitted flavor flight floors flower flying follow forced forces forest forget forgot
+        format former forms fossil foster fought fourth frames freeze fridge friend fright frozen funded
+        future gadget gained galaxy gallon gamble gaming garage garden garlic gather gender genius gentle
+        gently german ghost giants gifted glance gloves golden google gospel gossip grades grains gravel
+        grease great greens ground groups growth guilty guitar habits hammer handle happen harbor harder
+        hardly health hearts heaven height helmet helper herbal hidden hiding higher highly hiking hiring
+        hockey holder hollow honest honour hooked horror horses hosted houses hugely humane humble hunger
+        hunter hybrid ignore immune impact import impose inches income indeed indoor induce infant inform
+        injury inning inputs insect insert inside insist insult intact intake intend intent invest invite
+        island itself jacket jersey joined joints judges jumper jungle junior keeper kidney killed killer
+        kindly knight knives labels labour ladder ladies landed laptop larger lasers lasted lately latest
+        latter launch lawyer layers layout leader league learns leaves legacy legend length lenses lesson
+        letter levels liable lights likely limits linear lineup linked liquid listen little lively livers
+        living loaded locate locked locker lonely longer looked looser losing losses lounge lovely lovers
+        loving lowers lowest lumber luxury lyrics magnet maiden mailed mainly makers makeup making manage
+        manual marble margin marine marker market marvel masses master matrix matter mature medium member
+        memory mental mentor merged merger method metric middle mighty mining minor minute mirror misery
+        missed mixing mobile models modern modest modify module moment monkey months mostly mother motion
+        motors mounts movies moving murder muscle museum mutual myself narrow nation native nature nausea
+        nearby nearly needle nerves neural newest nicely nights ninety nobody noises normal notice notion
+        novels number nurses object obtain occupy occurs oceans office offset oldest online onions opened
+        opener openly oppose optics option orange orders orgies origin ounces outfit outlet output outset
+        owners oxford packed packet paints palace panels papers parcel parent parish parked parks partly
+        passed passes patent patrol patron paused paving paying peanut pencil people pepper period permit
+        person petrol phases phones photos phrase picked pickup picnic pieces pillow pilots pirate pistol
+        places plains planet plants plasma plates played player please pledge plenty pocket podium poetry
+        points poison police policy polish polite poorly popped portal porter posing postal posted poster
+        potato pounds powder powers prayer prefer pretty priced prices priest primer prince prints prison
+        prizes profit prompt proper proved proven proves public pulled punish pupils purely purple pursue
+         pushed puzzle python quartz quests queues quoted quotes rabbit racial racing racism racist radius
+        raised raises random ranges ranked rapid rarely rather rating ratios reader really reason rebels
+        recall recent recipe reckon record reduce reform refund refuse regain regime region regret reject
+        relate relief remain remark remedy remind remote remove render rental repair repeat report rescue
+        resign resist resort result resume retail retain retire return reveal review reward rhythm ribbon
+        riders riding rights ripple rising rivals rivers robots rocket rolled roller rookie roster rotary
+        rotate rounds routes rubber rugged ruling runner runway rushed safety salary salmon sample sands
+        saving scales scared scenes scheme school scored scores scream screen script scroll sealed search
+        season seated second secret sector secure seeing select seller senior senses sensor series served
+        server settle setups severe shadow shaken shaker shapes shared shares sharks sheets shells shield
+        shifts shirts shoots shores shorts should showed shower shrimp shrink signal signed silent silver
+        simple simply singer single sister sketch skills skinny skirts slaves sleeps sleeve slices slider
+        slides slight slopes slowly slower smite smooth snacks snakes soccer social socket sodium soften
+        softer solely solved sooner sorted sounds source soviet spaces speaks speech speeds spells spends
+        spheres spices spider spiked spill spinit spirit splash splits spoken sports spread spring square
+        stable stacks stages stains stairs stakes stamps stance stands stared starts stated states static
+        statue status stayed steady steaks steals steam steers sticky sticks stones stood stools stored
+        stores storms strain straits strand straps straw streak stream street stress strict strike string
+        strips stroke strong struck studio stuff stupid sturdy styles submit subtle subway sucked sudden
+        suffer sugars suited suites summer summit summon supply surely surfer surge switch swords symbol
+        system tables tablet tackle tactic tagged taking talent talked taller target tasted tastes taught
+        taxing teams tears tease teeth tells temper temple tenant tender tennis tense tents terms terror
+        tested thanks theirs theory themes there thesis thick thieves things thinks thirst thirty thongs
+        thorax thorns though threat three thrill throat throne throws thrust thumbs ticket tigers tights
+        timber timely timing tissue titles toilet token tomato tongue topics topped totals touch tough
+        toured toward towels towers towns toxic traces tracks trader trades tragic trails trains traits
+        trauma travel treats treaty trends trials tribal tribes tricks tried tries troops trophy trucks
+        trusts truths trying tubes tucked tumor tunnel turkey turned turner turns twelve twenty twice
+        twins twists types typical typing ulcers uncle under unfair unfold unique united units unity
+        update upload upper upset urban usage users using usual utility vacuum valley valued values valves
+        vanish varies varied vast vector velvet vendor venue verbal verify verse versus vessel vested
+        victim viewer viewed views villa violet viral virtue virus visits visual voices volume voted
+        voters voting voyage waited waiter wakes walked walker walks walls wanted wants warmth warned
+        washed washer wasted wastes watch water waves waxed weaker wealth weapon wears weary weave
+        webcam wedge weeds weekly weighs weight weird wheels where which while whilst white whole
+        whose wicked widely wider width wilder window winds windy wines wings winner winter wiped
+        wired wires wisdom wished wishes within wizard wolves woman women wonder woods words works
+        world worms worry worse worst worth would wounds wrapped wrath wreck wrist write wrong wrote
+        yacht yards years yeast yellow yields yours youth zeros zones
+        `;
+
+        // Process dictionary string into array
+        // Cleaning up the raw string: split by whitespace, trim, lowercase, remove empty
+        const commonWords = dictionaryRaw.split(/\s+/)
+            .map(w => w.trim().toLowerCase())
+            .filter(w => w.length >= 3 && w.length <= 6 && /^[a-z]+$/.test(w));
+
+        // Use a Set to remove any potential duplicates
+        const wordSet = new Set(commonWords);
+        const dictionary = Array.from(wordSet);
+
+        const letterInput = document.getElementById('letterInput');
+        const letterCount = document.getElementById('letterCount');
+        const resultsArea = document.getElementById('resultsArea');
+
+        // Event Listeners
+        letterInput.addEventListener('input', (e) => {
+            // Filter non-alpha
+            e.target.value = e.target.value.replace(/[^a-zA-Z]/g, '');
+            updateCount();
+        });
+
+        letterInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') findWords();
+        });
+
+        function updateCount() {
+            const len = letterInput.value.length;
+            letterCount.textContent = `${len} letter${len !== 1 ? 's' : ''} entered`;
+        }
+
+        function clearInput() {
+            letterInput.value = '';
+            letterInput.focus();
+            updateCount();
+            resultsArea.classList.add('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+        }
+
+        function getFrequency(str) {
+            const freq = {};
+            for (let char of str) {
+                freq[char] = (freq[char] || 0) + 1;
+            }
+            return freq;
+        }
+
+        function findWords() {
+            const inputVal = letterInput.value.toLowerCase();
+            if (inputVal.length < 3) {
+                alert("Please enter at least 3 letters.");
+                return;
+            }
+
+            const inputFreq = getFrequency(inputVal);
+            
+            // Logic: A word is valid if for every char in word, 
+            // wordFreq[char] <= inputFreq[char]
+            
+            let matches = dictionary.filter(word => {
+                const wordFreq = getFrequency(word);
+                for (let char in wordFreq) {
+                    if (!inputFreq[char] || wordFreq[char] > inputFreq[char]) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            // Filter if > 50 results: Require at least one of the last 2 letters entered to be present in the word
+            if (matches.length > 50 && inputVal.length >= 2) {
+                const lastTwo = inputVal.slice(-2);
+                const char1 = lastTwo[0];
+                const char2 = lastTwo[1];
+                
+                matches = matches.filter(word => {
+                    // Check if the word contains at least one of the last 2 letters
+                    return word.includes(char1) || word.includes(char2);
+                });
+            }
+
+            displayResults(matches);
+        }
+
+        function displayResults(words) {
+            const container = document.getElementById('resultsArea');
+            const emptyState = document.getElementById('emptyState');
+            
+            // Clear previous results
+            [3, 4, 5, 6].forEach(n => {
+                document.querySelector(`.content-${n}`).innerHTML = '';
+                document.getElementById(`group-${n}`).classList.add('hidden');
+            });
+
+            if (words.length === 0) {
+                container.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.classList.remove('hidden');
+
+            document.getElementById('totalFound').textContent = words.length;
+
+            // Group by length
+            const grouped = { 3: [], 4: [], 5: [], 6: [] };
+            words.forEach(w => {
+                if(grouped[w.length]) grouped[w.length].push(w);
+            });
+
+            // Render
+            [6, 5, 4, 3].forEach(len => {
+                const groupDiv = document.getElementById(`group-${len}`);
+                const contentDiv = document.querySelector(`.content-${len}`);
+                const list = grouped[len].sort(); // Alphabetical sort
+
+                if (list.length > 0) {
+                    groupDiv.classList.remove('hidden');
+                    list.forEach(word => {
+                        const chip = document.createElement('div');
+                        chip.className = `word-chip bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm font-medium text-sm select-all cursor-text`;
+                        chip.textContent = word;
+                        contentDiv.appendChild(chip);
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>
