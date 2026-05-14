@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids Brushing Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.05); }
+        }
+        .animate-pulse-fast {
+            animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        .quadrant {
+            transition: all 0.5s ease;
+            opacity: 0.3;
+            transform: scale(0.95);
+        }
+        
+        .quadrant.active {
+            opacity: 1;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            z-index: 10;
+        }
+
+        /* Fun tooth shape for the center */
+        .tooth-icon {
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+    </style>
+</head>
+<body class="bg-blue-100 min-h-screen flex flex-col items-center justify-center font-sans overflow-hidden">
+
+    <div class="w-full max-w-md p-6 flex flex-col items-center">
+        
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-blue-600 mb-2 drop-shadow-sm">Brush Your Teeth!</h1>
+            <p id="status-text" class="text-xl text-blue-500 font-medium h-8">Ready to get sparkling clean?</p>
+        </div>
+
+        <!-- Timer Display -->
+        <div class="relative w-48 h-48 mb-8 flex items-center justify-center">
+            <!-- Decorative ring -->
+            <div class="absolute inset-0 rounded-full border-8 border-blue-200"></div>
+            <!-- Timer text -->
+            <div id="timer-display" class="text-6xl font-black text-blue-600 z-10">0:00</div>
+        </div>
+
+        <!-- Mouth Quadrants Visualization -->
+        <div class="relative w-64 h-64 mb-8 bg-white rounded-3xl shadow-xl overflow-hidden border-4 border-blue-200">
+            <!-- Center divider lines -->
+            <div class="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -mt-0.5 z-0"></div>
+            <div class="absolute left-1/2 top-0 h-full w-1 bg-gray-200 -ml-0.5 z-0"></div>
+            
+            <!-- Center Tooth Icon (SVG) -->
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 tooth-icon bg-white p-2 rounded-full">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 21V9a2 2 0 0 1 4 0v12"/>
+                    <path d="M10 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1"/>
+                    <path d="M14 8h-4"/>
+                    <path d="M4 14v1a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1"/>
+                    <path d="M20 14A4 4 0 0 0 16 10H8a4 4 0 0 0-4 4"/>
+                </svg>
+            </div>
+
+            <!-- The 4 Quadrants -->
+            <div class="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                <!-- Top Left -->
+                <div id="quad-0" class="quadrant bg-red-400 rounded-tl-2xl flex items-center justify-center m-1">
+                    <span class="text-white font-bold text-lg drop-shadow-md text-center">Top Left</span>
+                </div>
+                <!-- Top Right -->
+                <div id="quad-1" class="quadrant bg-green-400 rounded-tr-2xl flex items-center justify-center m-1">
+                    <span class="text-white font-bold text-lg drop-shadow-md text-center">Top Right</span>
+                </div>
+                <!-- Bottom Left -->
+                <div id="quad-2" class="quadrant bg-yellow-400 rounded-bl-2xl flex items-center justify-center m-1">
+                    <span class="text-white font-bold text-lg drop-shadow-md text-center">Bottom Left</span>
+                </div>
+                <!-- Bottom Right -->
+                <div id="quad-3" class="quadrant bg-purple-400 rounded-br-2xl flex items-center justify-center m-1">
+                    <span class="text-white font-bold text-lg drop-shadow-md text-center">Bottom Right</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <button id="start-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-12 rounded-full shadow-lg transform transition active:scale-95 text-2xl w-full max-w-xs">
+            START BRUSHING!
+        </button>
+
+    </div>
+
+    <!-- Celebration Screen (Hidden by default) -->
+    <div id="celebration" class="fixed inset-0 bg-blue-500 bg-opacity-95 hidden flex-col items-center justify-center z-50 text-white transition-opacity duration-500 opacity-0 p-6">
+        <div class="flex flex-col items-center justify-center w-full max-w-md mx-auto text-center">
+            <h2 class="text-6xl font-black mb-4 drop-shadow-lg w-full text-center">Great Job!</h2>
+            <div class="text-8xl mb-8 animate-bounce flex justify-center w-full">🦷✨</div>
+            <p class="text-2xl font-bold mb-12 w-full text-center">Your teeth are super clean!</p>
+            <button id="reset-btn" class="bg-white text-blue-600 hover:bg-gray-100 font-bold py-3 px-8 rounded-full shadow-lg transform transition active:scale-95 text-xl mx-auto flex items-center justify-center">
+                Brush Again Later
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const SECONDS_PER_QUADRANT = 30; // 30 seconds per quadrant
+        const TOTAL_QUADRANTS = 4;
+        
+        // State
+        let currentQuadrant = 0;
+        let timeLeftInQuadrant = SECONDS_PER_QUADRANT;
+        let timerInterval = null;
+        let isRunning = false;
+
+        // DOM Elements
+        const timerDisplay = document.getElementById('timer-display');
+        const startBtn = document.getElementById('start-btn');
+        const statusText = document.getElementById('status-text');
+        const celebrationScreen = document.getElementById('celebration');
+        const resetBtn = document.getElementById('reset-btn');
+        const quadrants = [
+            document.getElementById('quad-0'),
+            document.getElementById('quad-1'),
+            document.getElementById('quad-2'),
+            document.getElementById('quad-3')
+        ];
+
+        const quadrantNames = [
+            "Top Left Teeth",
+            "Top Right Teeth",
+            "Bottom Left Teeth",
+            "Bottom Right Teeth"
+        ];
+
+        function updateDisplay() {
+            const minutes = Math.floor(timeLeftInQuadrant / 60);
+            const seconds = timeLeftInQuadrant % 60;
+            timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function setActiveQuadrant(index) {
+            // Reset all
+            quadrants.forEach(q => {
+                q.classList.remove('active', 'animate-pulse-fast');
+            });
+
+            if (index >= 0 && index < TOTAL_QUADRANTS) {
+                // Activate current
+                quadrants[index].classList.add('active', 'animate-pulse-fast');
+                statusText.textContent = `Brush your ${quadrantNames[index]}!`;
+            } else if (index >= TOTAL_QUADRANTS) {
+                statusText.textContent = "All done!";
+            } else {
+                statusText.textContent = "Ready to get sparkling clean?";
+            }
+        }
+
+        function timerTick() {
+            timeLeftInQuadrant--;
+            updateDisplay();
+
+            if (timeLeftInQuadrant <= 0) {
+                currentQuadrant++;
+                
+                if (currentQuadrant < TOTAL_QUADRANTS) {
+                    // Move to next quadrant
+                    timeLeftInQuadrant = SECONDS_PER_QUADRANT;
+                    setActiveQuadrant(currentQuadrant);
+                    updateDisplay();
+                    // Play a little sound or vibration if possible on mobile
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+                } else {
+                    // Finish
+                    finishBrushing();
+                }
+            }
+        }
+
+        function startBrushing() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            currentQuadrant = 0;
+            timeLeftInQuadrant = SECONDS_PER_QUADRANT;
+            
+            startBtn.classList.add('hidden');
+            
+            updateDisplay();
+            setActiveQuadrant(currentQuadrant);
+            
+            timerInterval = setInterval(timerTick, 1000);
+        }
+
+        function finishBrushing() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            
+            // Show celebration
+            celebrationScreen.classList.remove('hidden');
+            // Small delay to allow display block to apply before changing opacity for transition
+            setTimeout(() => {
+                celebrationScreen.classList.remove('opacity-0');
+            }, 50);
+            
+            if (navigator.vibrate) {
+                navigator.vibrate([300, 100, 300]); // Victory vibration
+            }
+        }
+
+        function resetApp() {
+            celebrationScreen.classList.add('opacity-0');
+            setTimeout(() => {
+                celebrationScreen.classList.add('hidden');
+                
+                currentQuadrant = -1;
+                timeLeftInQuadrant = 0;
+                updateDisplay();
+                setActiveQuadrant(-1);
+                
+                startBtn.classList.remove('hidden');
+                timerDisplay.textContent = "0:00";
+            }, 500); // Wait for fade out
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', startBrushing);
+        resetBtn.addEventListener('click', resetApp);
+
+        // Initialize display
+        updateDisplay();
+        
+    </script>
+</body>
+</html>
