@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galaxy Kid Adventure</title>
+    <title>Galaxy Adventure</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
@@ -103,7 +103,7 @@
         const nextLevelButton = document.getElementById('next-level-button');
 
         // --- Game State & Config ---
-        let gameState = 'map'; // 'map' or 'level'
+        let gameState = 'map'; // 'map', 'level', or 'dungeon'
         const config = {
             gravity: 0.6, playerSpeed: 5, jumpForce: 15, playerWidth: 40, playerHeight: 60,
             enemySpeed: 2, bulletSpeed: 10, maxLevels: 10
@@ -120,7 +120,11 @@
         let camera, player, platforms, gems, enemies, bullets, door, boss, key, playerHasKey, score, currentLevel, keys, gameActive, doorMessage;
         let mapPlayer, levelNodes, completedLevels, stars, backgroundMountains, doorGlow;
         let doorAnimation = { active: false, timer: 0, duration: 60, startX: 0, startY: 0, startW: 0, startH: 0 };
-
+        
+        // Dungeon specific globals
+        let dungeonGrid, dungeonCellSize, dungeonCols, dungeonRows;
+        let dungeonCages, dungeonKeysList, dungeonPlayer, dungeonExit, dungeonKeysCount;
+        let isFullRestartMode = false;
 
         // --- Asset Drawing Functions ---
         function drawPlayer(p) {
@@ -238,6 +242,30 @@
             ctx.fill();
         }
         function drawKey(k) { ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(k.x, k.y, k.width / 2, 0, Math.PI * 2); ctx.rect(k.x + k.width / 2 - 2, k.y - 2, k.width, 4); ctx.rect(k.x + k.width * 1.5 - 2, k.y + 2, 4, 6); ctx.fill(); }
+        
+        function drawDungeonKey(k) {
+            ctx.save();
+            ctx.translate(k.x + k.width/2, k.y + k.height/2);
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(-5, 0, 6, 0, Math.PI * 2);
+            ctx.rect(0, -2, 12, 4);
+            ctx.rect(8, 2, 4, 6);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawDungeonCage(c) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(c.x, c.y, c.width, c.height); 
+            ctx.fillStyle = '#6c757d';
+            for(let i = 0; i < c.width; i += 8) {
+                ctx.fillRect(c.x + i + 2, c.y, 4, c.height);
+            }
+            ctx.fillRect(c.x, c.y, c.width, 6);
+            ctx.fillRect(c.x, c.y + c.height - 6, c.width, 6);
+        }
+
         function drawPlanetBackground() {
             backgroundMountains.forEach(mountain => {
                 ctx.fillStyle = '#0b1a2e';
@@ -253,9 +281,11 @@
         // --- Game Initialization ---
         function initGame() {
             score = 0;
+            scoreEl.textContent = `Score: ${score}`;
             completedLevels = [];
             keys = { left: false, right: false, up: false, down: false, space: false };
             doorGlow = 0.5;
+            isFullRestartMode = false;
             
             levelNodes = [
                 { x: 150, y: 450, c1: '#3a86ff', c2: '#8338ec' }, { x: 300, y: 500, c1: '#ffbe0b', c2: '#fb5607' },
@@ -272,7 +302,7 @@
             }
 
             switchToMap();
-            gameLoop();
+            if (!gameLoopId) gameLoop();
         }
 
         function startLevel(levelNum) {
@@ -289,6 +319,134 @@
             generateLevel(currentLevel);
             gameState = 'level';
         }
+
+        function startDungeon() {
+            gameActive = true;
+            gameState = 'dungeon';
+            dungeonCellSize = 40;
+            dungeonCols = 41;
+            dungeonRows = 41;
+            dungeonKeysCount = 0;
+            isFullRestartMode = false;
+
+            levelIndicatorEl.textContent = 'Level: Dungeon';
+            ammoIndicatorEl.textContent = `Keys: 0`;
+            instructionTextEl.textContent = 'Find the Exit!';
+            messageBox.style.display = 'none';
+
+            // 1 = Wall, 0 = Path
+            dungeonGrid = Array(dungeonCols).fill().map(() => Array(dungeonRows).fill(1));
+
+            // Generate Maze using Recursive Backtracker
+            function carve(x, y) {
+                dungeonGrid[x][y] = 0;
+                const dirs = [[0,-2], [0,2], [-2,0], [2,0]];
+                for (let i = dirs.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+                }
+                for (let [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < dungeonCols - 1 && ny > 0 && ny < dungeonRows - 1 && dungeonGrid[nx][ny] === 1) {
+                        dungeonGrid[x + dx/2][y + dy/2] = 0; // carve between
+                        carve(nx, ny);
+                    }
+                }
+            }
+            carve(1, 1);
+
+            // Find Path to Exit using BFS
+            let path = [];
+            let queue = [ {pos: [1,1], path: [[1,1]]} ];
+            let visited = new Set(["1,1"]);
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                if(curr.pos[0] === dungeonCols-2 && curr.pos[1] === dungeonRows-2) {
+                    path = curr.path;
+                    break;
+                }
+                const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                for (let [dx, dy] of dirs) {
+                    const nx = curr.pos[0] + dx, ny = curr.pos[1] + dy;
+                    if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !visited.has(`${nx},${ny}`)) {
+                        visited.add(`${nx},${ny}`);
+                        queue.push({pos: [nx, ny], path: [...curr.path, [nx, ny]]});
+                    }
+                }
+            }
+            
+            if (path.length === 0) path = [[1,1], [dungeonCols-2, dungeonRows-2]]; // Fallback
+
+            // Distribute 5 Cages & 5 Keys
+            dungeonCages = [];
+            dungeonKeysList = [];
+            const cageIndices = [];
+            for(let i=1; i<=5; i++) {
+                cageIndices.push(Math.floor((path.length - 1) * i / 6));
+            }
+
+            for(let i=0; i<5; i++) {
+                const cageCell = path[cageIndices[i]];
+                dungeonCages.push({ 
+                    gridX: cageCell[0], gridY: cageCell[1], active: true,
+                    x: cageCell[0]*dungeonCellSize, y: cageCell[1]*dungeonCellSize,
+                    width: dungeonCellSize, height: dungeonCellSize 
+                });
+
+                // Find valid spots for the key (branches off the solution path BEFORE this cage)
+                const startIdx = i === 0 ? 0 : cageIndices[i-1] + 1;
+                const endIdx = cageIndices[i] - 1;
+
+                let validSpots = [];
+                let q2 = [];
+                let v2 = new Set();
+
+                for(let j=startIdx; j<=endIdx; j++) {
+                    q2.push(path[j]);
+                    v2.add(`${path[j][0]},${path[j][1]}`);
+                }
+
+                while(q2.length > 0) {
+                    let curr = q2.shift();
+                    let isMainPath = path.some(p => p[0]===curr[0] && p[1]===curr[1]);
+                    if(!isMainPath || validSpots.length === 0) validSpots.push(curr);
+
+                    const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                    for (let [dx, dy] of dirs) {
+                        const nx = curr[0] + dx, ny = curr[1] + dy;
+                        if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !v2.has(`${nx},${ny}`)) {
+                            let isCage = dungeonCages.some(c => c.gridX === nx && c.gridY === ny);
+                            if(!isCage) {
+                                v2.add(`${nx},${ny}`);
+                                q2.push([nx, ny]);
+                            }
+                        }
+                    }
+                }
+
+                // Prefer non-main path spots if available
+                let offPathSpots = validSpots.filter(spot => !path.some(p => p[0]===spot[0] && p[1]===spot[1]));
+                let chosenSpots = offPathSpots.length > 0 ? offPathSpots : validSpots;
+                if (chosenSpots.length > 1) chosenSpots = chosenSpots.filter(spot => !(spot[0]===1 && spot[1]===1));
+                
+                let chosen = chosenSpots[Math.floor(Math.random() * chosenSpots.length)];
+                dungeonKeysList.push({ 
+                    gridX: chosen[0], gridY: chosen[1], collected: false,
+                    x: chosen[0]*dungeonCellSize + 10, y: chosen[1]*dungeonCellSize + 10,
+                    width: 20, height: 20 
+                });
+            }
+
+            dungeonPlayer = {
+                x: 1 * dungeonCellSize + 5, y: 1 * dungeonCellSize + 5,
+                width: 30, height: 30, speed: 4, direction: 1
+            };
+
+            dungeonExit = {
+                x: (dungeonCols - 2) * dungeonCellSize, y: (dungeonRows - 2) * dungeonCellSize,
+                width: dungeonCellSize, height: dungeonCellSize, glow: 0
+            };
+        }
         
         function switchToMap() {
             gameState = 'map';
@@ -296,6 +454,11 @@
             ammoIndicatorEl.textContent = 'Ammo: -';
             instructionTextEl.textContent = 'Space to Select';
             messageBox.style.display = 'none';
+            // Return player specifically near Boss level node (Level 10 is index 9)
+            if (currentLevel === config.maxLevels && mapPlayer) {
+                mapPlayer.x = levelNodes[9].x;
+                mapPlayer.y = levelNodes[9].y;
+            }
         }
 
         class SeededRandom { constructor(seed) { this.seed = seed; } next() { this.seed = (this.seed * 1664525 + 1013904223) % 2**32; return this.seed / 2**32; } }
@@ -371,6 +534,11 @@
                 if (keyName === 'ArrowLeft') keys.left = true;
                 if (keyName === 'ArrowRight') keys.right = true;
                 if (keyName === 'ArrowUp') keys.up = true;
+            } else if (gameState === 'dungeon') {
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') keys.down = true;
             }
             if (keyName === ' ' || keyName === 'Spacebar') {
                 if (!keys.space) {
@@ -500,16 +668,14 @@
                 if (canMove) { e.x = nextEnemyX; }
                 if (e.x < e.startX || e.x > e.startX + e.range) { e.direction *= -1; }
             });
+            
             if (boss && !boss.isDefeated) {
                 // Chase Logic
                 const chaseSpeed = 1.5;
-                if (player.x > boss.x + boss.width) {
-                    boss.dx = chaseSpeed;
-                } else if (player.x < boss.x) {
-                    boss.dx = -chaseSpeed;
-                } else {
-                    boss.dx = 0;
-                }
+                if (player.x > boss.x + boss.width) boss.dx = chaseSpeed;
+                else if (player.x < boss.x) boss.dx = -chaseSpeed;
+                else boss.dx = 0;
+                
                 boss.x += boss.dx;
 
                 // Gravity and platform collision
@@ -539,9 +705,12 @@
                     boss.dy = 0;
                 }
 
-                // Player collision
-                if (checkCollision(player, boss)) { showMessage("Defeated by the boss!", false); }
+                // Player collision - Triggers Dungeon
+                if (checkCollision(player, boss)) {
+                    startDungeon();
+                }
             }
+
             if (doorMessage.timer > 0) { doorMessage.timer--; }
             camera.x = player.x - canvas.width / 2 + player.width / 2;
             if (camera.x < 0) camera.x = 0; if (camera.x > config.levelWidth - canvas.width) camera.x = config.levelWidth - canvas.width;
@@ -565,6 +734,77 @@
                     doorAnimation.startH = player.height;
                 }
             }
+        }
+
+        function updateDungeon() {
+            if (!gameActive) return;
+
+            let dx = 0, dy = 0;
+            if (keys.left) { dx = -dungeonPlayer.speed; dungeonPlayer.direction = -1; }
+            if (keys.right) { dx = dungeonPlayer.speed; dungeonPlayer.direction = 1; }
+            if (keys.up) dy = -dungeonPlayer.speed;
+            if (keys.down) dy = dungeonPlayer.speed;
+
+            function isWallColliding(x, y) {
+                let corners = [
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)}
+                ];
+                return corners.some(c => !dungeonGrid[c.cx] || dungeonGrid[c.cx][c.cy] === 1);
+            }
+
+            if (dx !== 0) {
+                let oldX = dungeonPlayer.x;
+                dungeonPlayer.x += dx;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.x = oldX;
+            }
+            if (dy !== 0) {
+                let oldY = dungeonPlayer.y;
+                dungeonPlayer.y += dy;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.y = oldY;
+            }
+
+            // Collisions with keys
+            dungeonKeysList.forEach(k => {
+                if (!k.collected && checkCollision(dungeonPlayer, k)) {
+                    k.collected = true;
+                    dungeonKeysCount++;
+                    ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                }
+            });
+
+            // Collisions with cages
+            dungeonCages.forEach(c => {
+                if (c.active && checkCollision(dungeonPlayer, c)) {
+                    if (dungeonKeysCount > 0) {
+                        dungeonKeysCount--;
+                        c.active = false;
+                        ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                    } else {
+                        isFullRestartMode = true;
+                        showMessage("Game Over!", false);
+                        messageText.textContent = "Caught in a Cage! No Keys Left.";
+                        restartButton.textContent = "Restart Game";
+                        nextLevelButton.style.display = 'none';
+                    }
+                }
+            });
+
+            // Exit collision
+            if (checkCollision(dungeonPlayer, dungeonExit)) {
+                switchToMap();
+            }
+
+            // Camera bounds (center on player)
+            camera.x = dungeonPlayer.x - canvas.width / 2 + dungeonPlayer.width / 2;
+            camera.y = dungeonPlayer.y - canvas.height / 2 + dungeonPlayer.height / 2;
+            
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > dungeonCols * dungeonCellSize - canvas.width) camera.x = dungeonCols * dungeonCellSize - canvas.width;
+            if (camera.y > dungeonRows * dungeonCellSize - canvas.height) camera.y = dungeonRows * dungeonCellSize - canvas.height;
         }
 
         // --- Draw Functions ---
@@ -664,6 +904,51 @@
             }
         }
 
+        function drawDungeon() {
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            let startCol = Math.floor(camera.x / dungeonCellSize);
+            let endCol = startCol + (canvas.width / dungeonCellSize) + 1;
+            let startRow = Math.floor(camera.y / dungeonCellSize);
+            let endRow = startRow + (canvas.height / dungeonCellSize) + 1;
+
+            for(let i=Math.max(0, startCol); i<Math.min(dungeonCols, endCol); i++) {
+                for(let j=Math.max(0, startRow); j<Math.min(dungeonRows, endRow); j++) {
+                    if (dungeonGrid[i][j] === 1) {
+                        ctx.fillStyle = '#2b2b36';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                        ctx.strokeStyle = '#111';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    } else {
+                        ctx.fillStyle = '#414152';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    }
+                }
+            }
+
+            dungeonExit.glow = (dungeonExit.glow || 0) + 0.1;
+            ctx.fillStyle = `rgba(83, 191, 157, ${0.5 + Math.sin(dungeonExit.glow)*0.3})`;
+            ctx.beginPath();
+            ctx.arc(dungeonExit.x + dungeonCellSize/2, dungeonExit.y + dungeonCellSize/2, dungeonCellSize/2 - 5, 0, Math.PI*2);
+            ctx.fill();
+
+            dungeonKeysList.forEach(k => { if(!k.collected) drawDungeonKey(k); });
+            dungeonCages.forEach(c => { if(c.active) drawDungeonCage(c); });
+
+            drawPlayer({
+                x: dungeonPlayer.x, y: dungeonPlayer.y,
+                width: dungeonPlayer.width, height: dungeonPlayer.height,
+                direction: dungeonPlayer.direction
+            });
+
+            ctx.restore();
+        }
+
         // --- Game Loop ---
         let gameLoopId;
         function gameLoop() {
@@ -673,6 +958,9 @@
             } else if (gameState === 'level') {
                 updateLevel();
                 drawLevel();
+            } else if (gameState === 'dungeon') {
+                updateDungeon();
+                drawDungeon();
             }
             gameLoopId = requestAnimationFrame(gameLoop);
         }
@@ -688,7 +976,8 @@
                 messageText.textContent = `You beat the game! Final Score: ${score}`;
                 nextLevelButton.style.display = 'none';
                 restartButton.textContent = 'Play Again?';
-                restartButton.onclick = () => location.reload();
+                restartButton.style.display = 'block';
+                isFullRestartMode = true;
             } else if (isLevelEnd) {
                 if (!completedLevels.includes(currentLevel)) { completedLevels.push(currentLevel); }
                 mapPlayer.x = levelNodes[currentLevel - 1].x;
@@ -709,7 +998,11 @@
         
         restartButton.addEventListener('click', () => {
             messageBox.style.display = 'none';
-            startLevel(currentLevel);
+            if (isFullRestartMode) {
+                initGame();
+            } else {
+                startLevel(currentLevel);
+            }
         });
 
         nextLevelButton.addEventListener('click', () => {
@@ -723,4 +1016,3 @@
     </script>
 </body>
 </html>
-
