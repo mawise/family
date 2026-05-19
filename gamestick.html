@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Adventure</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #game-container {
+            position: relative;
+            border: 4px solid #0f3460;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(224, 224, 224, 0.3);
+        }
+        canvas {
+            display: block;
+            background-color: #000010; /* Darker space background */
+        }
+        #info-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            padding: 10px 20px;
+            background-color: #0f3460;
+            border-top: 4px solid #e94560;
+            box-sizing: border-box;
+        }
+        .info-text {
+            font-size: 16px;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(15, 52, 96, 0.9);
+            color: white;
+            padding: 40px;
+            border: 4px solid #e94560;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 24px;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #restart-button, #next-level-button {
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            color: #1a1a2e;
+            background-color: #e94560;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #restart-button:hover, #next-level-button:hover {
+            background-color: #ff7691;
+        }
+    </style>
+</head>
+<body>
+    <div id="info-bar">
+        <div id="score" class="info-text">Score: 0</div>
+        <div id="level-indicator" class="info-text">Level: Map</div>
+        <div id="ammo-indicator" class="info-text">Ammo: -</div>
+        <div id="instruction-text" class="info-text">Space to Select</div>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div id="message-box">
+        <div id="message-text"></div>
+        <button id="next-level-button">Back to Map</button>
+        <button id="restart-button">Try Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const levelIndicatorEl = document.getElementById('level-indicator');
+        const ammoIndicatorEl = document.getElementById('ammo-indicator');
+        const instructionTextEl = document.getElementById('instruction-text');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const restartButton = document.getElementById('restart-button');
+        const nextLevelButton = document.getElementById('next-level-button');
+
+        // --- Game State & Config ---
+        let gameState = 'map'; // 'map', 'level', or 'dungeon'
+        const config = {
+            gravity: 0.6, playerSpeed: 5, jumpForce: 15, playerWidth: 40, playerHeight: 60,
+            enemySpeed: 2, bulletSpeed: 10, maxLevels: 10
+        };
+        const levelConfigs = [
+            { width: 2000, enemies: 1, gems: 5, floaters: 3 }, { width: 2200, enemies: 2, gems: 7, floaters: 4 },
+            { width: 2400, enemies: 2, gems: 8, floaters: 5 }, { width: 2600, enemies: 3, gems: 10, floaters: 6 },
+            { width: 2800, enemies: 4, gems: 12, floaters: 7 }, { width: 3000, enemies: 4, gems: 14, floaters: 8 },
+            { width: 3200, enemies: 5, gems: 15, floaters: 9 }, { width: 3400, enemies: 6, gems: 16, floaters: 10 },
+            { width: 3600, enemies: 7, gems: 18, floaters: 11 }, { width: 4000, enemies: 0, gems: 20, floaters: 12 },
+        ];
+
+        // --- Global Variables ---
+        let camera, player, platforms, gems, enemies, bullets, door, boss, key, playerHasKey, score, currentLevel, keys, gameActive, doorMessage;
+        let mapPlayer, levelNodes, completedLevels, stars, backgroundMountains, doorGlow;
+        
+        // Dungeon specific globals
+        let dungeonGrid, dungeonCellSize, dungeonCols, dungeonRows;
+        let dungeonCages, dungeonKeysList, dungeonPlayer, dungeonExit, dungeonKeysCount;
+        let isFullRestartMode = false;
+        let doorAnimation = { active: false, timer: 0, duration: 60, startX: 0, startY: 0, startW: 0, startH: 0 };
+
+        // --- Asset Drawing Functions ---
+        function drawPlayer(p) {
+            ctx.save();
+            // Translate to the center of the player for flipping
+            ctx.translate(p.x + p.width / 2, p.y + p.height / 2);
+            ctx.scale(p.direction || 1, 1);
+            ctx.translate(-(p.x + p.width / 2), -(p.y + p.height / 2));
+
+            const cx = p.x + p.width / 2;
+            const headR = p.width * 0.25;
+            const headY = p.y + headR + 2;
+            const neckY = headY + headR;
+            const pelvisY = p.y + p.height * 0.6;
+            const shoulderY = neckY + (pelvisY - neckY) * 0.2;
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(cx, headY, headR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(cx, neckY);
+            ctx.lineTo(cx, pelvisY);
+            ctx.stroke();
+
+            // Arms
+            ctx.beginPath();
+            // Back arm
+            ctx.moveTo(cx, shoulderY);
+            ctx.lineTo(cx - 10, shoulderY + 10);
+            // Front arm aiming forward
+            ctx.lineTo(cx + 15, shoulderY + 8);
+            ctx.stroke();
+            
+            // Draw a blaster being held
+            ctx.fillStyle = '#e94560';
+            ctx.fillRect(cx + 12, shoulderY + 4, 14, 6);
+
+            // Legs
+            ctx.beginPath();
+            if (p.onGround === false) {
+                // Leg-bending animation when jumping/falling mid-air
+                
+                // Back leg (bent up)
+                ctx.moveTo(cx, pelvisY);
+                ctx.lineTo(cx - 15, pelvisY + 12);  // Knee
+                ctx.lineTo(cx - 5, pelvisY + 28);   // Foot
+                
+                // Front leg (bent up)
+                ctx.moveTo(cx, pelvisY);
+                ctx.lineTo(cx + 15, pelvisY + 8);   // Knee
+                ctx.lineTo(cx + 8, pelvisY + 24);   // Foot
+            } else {
+                // Standing or walking cycle
+                let walkOffset = 0;
+                if (Math.abs(p.dx) > 0 || p.isMoving) {
+                    walkOffset = Math.sin((p.x + p.y) * 0.2) * 12; // Simple walk cycle
+                }
+                
+                // Back leg
+                ctx.moveTo(cx, pelvisY);
+                ctx.lineTo(cx - 10 + walkOffset, p.y + p.height);
+                
+                // Front leg
+                ctx.moveTo(cx, pelvisY);
+                ctx.lineTo(cx + 10 - walkOffset, p.y + p.height);
+            }
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawPlatform(p) {
+            ctx.fillStyle = '#6B4F3A';
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.fillStyle = '#53bf9d';
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            for (let i = 0; i <= p.width; i++) {
+                const yOffset = Math.sin((p.x + i) * 0.1) * 3;
+                ctx.lineTo(p.x + i, p.y + yOffset);
+            }
+            ctx.lineTo(p.x + p.width, p.y + 10);
+            ctx.lineTo(p.x, p.y + 10);
+            ctx.closePath();
+            ctx.fill();
+        }
+        function drawGem(g) { ctx.fillStyle = g.type === 'blue' ? '#4a90e2' : '#f9c74f'; ctx.save(); ctx.translate(g.x + g.width / 2, g.y + g.height / 2); ctx.rotate(g.angle); ctx.beginPath(); ctx.moveTo(0, -g.height / 2); ctx.lineTo(g.width / 2, 0); ctx.lineTo(0, g.height / 2); ctx.lineTo(-g.width / 2, 0); ctx.closePath(); ctx.fill(); ctx.restore(); g.angle += 0.05; }
+        
+        function drawEnemy(e) {
+            const bodyGreen = '#4CAF50'; const bellyGreen = '#8BC34A';
+            ctx.fillStyle = bodyGreen; ctx.beginPath(); ctx.arc(e.x + e.width / 2, e.y + 12, e.width / 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = bodyGreen; ctx.fillRect(e.x + 8, e.y + 15, e.width - 16, e.height - 15);
+            ctx.fillStyle = bellyGreen; ctx.beginPath(); ctx.arc(e.x + e.width / 2, e.y + 28, e.width / 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(e.x + e.width / 2 - 7, e.y + 10, 4, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(e.x + e.width / 2 + 7, e.y + 10, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = bodyGreen; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(e.x + e.width / 2, e.y + 2); ctx.lineTo(e.x + e.width / 2, e.y - 5); ctx.stroke();
+            ctx.fillStyle = bellyGreen; ctx.beginPath(); ctx.arc(e.x + e.width / 2, e.y - 7, 3, 0, Math.PI * 2); ctx.fill();
+        }
+
+        function drawDoor(d) {
+            ctx.fillStyle = '#6c757d'; ctx.fillRect(d.x, d.y, d.width, d.height);
+            ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.moveTo(d.x + 5, d.y + d.height); ctx.lineTo(d.x + 5, d.y + 20); ctx.arc(d.x + d.width / 2, d.y + 20, d.width / 2 - 5, Math.PI, 0); ctx.lineTo(d.x + d.width - 5, d.y + d.height); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.fillRect(d.x + 10, d.y + 20, d.width - 20, d.height - 20);
+        }
+        function drawFinalDoor(d) {
+            ctx.fillStyle = '#DAA520'; ctx.fillRect(d.x, d.y, d.width, d.height);
+            ctx.fillStyle = `rgba(255, 223, 0, ${doorGlow})`; ctx.beginPath(); ctx.moveTo(d.x + 5, d.y + d.height); ctx.lineTo(d.x + 5, d.y + 20); ctx.arc(d.x + d.width / 2, d.y + 20, d.width / 2 - 5, Math.PI, 0); ctx.lineTo(d.x + d.width - 5, d.y + d.height); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.fillRect(d.x + 10, d.y + 20, d.width - 20, d.height - 20);
+            ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(d.x + d.width / 2, d.y + d.height - 30, 8, 0, Math.PI * 2); ctx.fill();
+        }
+        function drawBullet(b) { ctx.fillStyle = '#f9c74f'; ctx.fillRect(b.x, b.y, b.width, b.height); }
+        function drawBoss(b) {
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(b.x, b.y - 25, b.width, 15);
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(b.x, b.y - 25, b.width * (b.hp / 5), 15);
+            const bodyGreen = '#4CAF50';
+            const bellyGreen = '#8BC34A';
+            ctx.fillStyle = bodyGreen;
+            ctx.beginPath();
+            ctx.ellipse(b.x + b.width / 2, b.y + b.height * 0.3, b.width * 0.45, b.height * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(b.x + b.width * 0.1, b.y + b.height * 0.5, b.width * 0.8, b.height * 0.5);
+            ctx.fillStyle = bellyGreen;
+            ctx.beginPath();
+            ctx.ellipse(b.x + b.width / 2, b.y + b.height * 0.7, b.width * 0.3, b.height * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.ellipse(b.x + b.width * 0.35, b.y + b.height * 0.25, b.width * 0.1, b.height * 0.15, -0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(b.x + b.width * 0.65, b.y + b.height * 0.25, b.width * 0.1, b.height * 0.15, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = bodyGreen;
+            ctx.fillRect(b.x + b.width * 0.2, b.y + b.height, b.width * 0.2, 15);
+            ctx.fillRect(b.x + b.width * 0.6, b.y + b.height, b.width * 0.2, 15);
+            ctx.strokeStyle = bodyGreen;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(b.x + b.width * 0.4, b.y + b.height * 0.05);
+            ctx.lineTo(b.x + b.width * 0.3, b.y - 10);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(b.x + b.width * 0.6, b.y + b.height * 0.05);
+            ctx.lineTo(b.x + b.width * 0.7, b.y - 10);
+            ctx.stroke();
+            ctx.fillStyle = bellyGreen;
+            ctx.beginPath();
+            ctx.arc(b.x + b.width * 0.3, b.y - 12, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(b.x + b.width * 0.7, b.y - 12, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        function drawKey(k) { ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(k.x, k.y, k.width / 2, 0, Math.PI * 2); ctx.rect(k.x + k.width / 2 - 2, k.y - 2, k.width, 4); ctx.rect(k.x + k.width * 1.5 - 2, k.y + 2, 4, 6); ctx.fill(); }
+        
+        function drawDungeonKey(k) {
+            ctx.save();
+            ctx.translate(k.x + k.width/2, k.y + k.height/2);
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(-5, 0, 6, 0, Math.PI * 2);
+            ctx.rect(0, -2, 12, 4);
+            ctx.rect(8, 2, 4, 6);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawDungeonCage(c) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(c.x, c.y, c.width, c.height); 
+            ctx.fillStyle = '#6c757d';
+            for(let i = 0; i < c.width; i += 8) {
+                ctx.fillRect(c.x + i + 2, c.y, 4, c.height);
+            }
+            ctx.fillRect(c.x, c.y, c.width, 6);
+            ctx.fillRect(c.x, c.y + c.height - 6, c.width, 6);
+        }
+
+        function drawPlanetBackground() {
+            backgroundMountains.forEach(mountain => {
+                ctx.fillStyle = '#0b1a2e';
+                ctx.beginPath();
+                ctx.moveTo(mountain.x, mountain.y);
+                ctx.lineTo(mountain.x + mountain.width / 2, mountain.y - mountain.height);
+                ctx.lineTo(mountain.x + mountain.width, mountain.y);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+
+        // --- Game Initialization ---
+        function initGame() {
+            score = 0;
+            scoreEl.textContent = `Score: ${score}`;
+            completedLevels = [];
+            keys = { left: false, right: false, up: false, down: false, space: false };
+            doorGlow = 0.5;
+            isFullRestartMode = false;
+            
+            levelNodes = [
+                { x: 150, y: 450, c1: '#3a86ff', c2: '#8338ec' }, { x: 300, y: 500, c1: '#ffbe0b', c2: '#fb5607' },
+                { x: 500, y: 480, c1: '#ff006e', c2: '#8338ec' }, { x: 680, y: 400, c1: '#3a86ff', c2: '#ffbe0b' },
+                { x: 600, y: 250, c1: '#53bf9d', c2: '#3a86ff' }, { x: 450, y: 150, c1: '#ff006e', c2: '#ffbe0b' },
+                { x: 250, y: 100, c1: '#8338ec', c2: '#53bf9d' }, { x: 100, y: 200, c1: '#fb5607', c2: '#ff006e' },
+                { x: 200, y: 300, c1: '#3a86ff', c2: '#ffbe0b' }, { x: 400, y: 320, c1: '#e94560', c2: '#ffd700' }
+            ];
+            mapPlayer = { x: 150, y: 450, width: 30, height: 30, vx: 0, vy: 0, angle: 0, thrust: 0.1, friction: 0.98, selectedNode: 0 };
+            
+            stars = [];
+            for (let i = 0; i < 200; i++) {
+                stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, radius: Math.random() * 1.5, alpha: Math.random() * 0.5 + 0.5 });
+            }
+
+            switchToMap();
+            if (!gameLoopId) gameLoop();
+        }
+
+        function startLevel(levelNum) {
+            currentLevel = levelNum;
+            gameActive = true;
+            playerHasKey = false;
+            levelIndicatorEl.textContent = `Level: ${currentLevel}`;
+            ammoIndicatorEl.textContent = `Ammo: 10`;
+            instructionTextEl.textContent = 'Space to Shoot';
+            player = { x: 100, y: 400, width: config.playerWidth, height: config.playerHeight, dx: 0, dy: 0, onGround: false, direction: 1, ammo: 10 };
+            bullets = [];
+            camera = { x: 0, y: 0 };
+            doorMessage = { text: '', timer: 0 };
+            generateLevel(currentLevel);
+            gameState = 'level';
+        }
+
+        function startDungeon() {
+            gameActive = true;
+            gameState = 'dungeon';
+            dungeonCellSize = 40;
+            dungeonCols = 41;
+            dungeonRows = 41;
+            dungeonKeysCount = 0;
+            isFullRestartMode = false;
+
+            levelIndicatorEl.textContent = 'Level: Dungeon';
+            ammoIndicatorEl.textContent = `Keys: 0`;
+            instructionTextEl.textContent = 'Find the Exit!';
+            messageBox.style.display = 'none';
+
+            // 1 = Wall, 0 = Path
+            dungeonGrid = Array(dungeonCols).fill().map(() => Array(dungeonRows).fill(1));
+
+            // Generate Maze using Recursive Backtracker
+            function carve(x, y) {
+                dungeonGrid[x][y] = 0;
+                const dirs = [[0,-2], [0,2], [-2,0], [2,0]];
+                for (let i = dirs.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+                }
+                for (let [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < dungeonCols - 1 && ny > 0 && ny < dungeonRows - 1 && dungeonGrid[nx][ny] === 1) {
+                        dungeonGrid[x + dx/2][y + dy/2] = 0; // carve between
+                        carve(nx, ny);
+                    }
+                }
+            }
+            carve(1, 1);
+
+            // Find Path to Exit using BFS
+            let path = [];
+            let queue = [ {pos: [1,1], path: [[1,1]]} ];
+            let visited = new Set(["1,1"]);
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                if(curr.pos[0] === dungeonCols-2 && curr.pos[1] === dungeonRows-2) {
+                    path = curr.path;
+                    break;
+                }
+                const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                for (let [dx, dy] of dirs) {
+                    const nx = curr.pos[0] + dx, ny = curr.pos[1] + dy;
+                    if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !visited.has(`${nx},${ny}`)) {
+                        visited.add(`${nx},${ny}`);
+                        queue.push({pos: [nx, ny], path: [...curr.path, [nx, ny]]});
+                    }
+                }
+            }
+            
+            if (path.length === 0) path = [[1,1], [dungeonCols-2, dungeonRows-2]]; // Fallback
+
+            // Distribute 5 Cages & 5 Keys
+            dungeonCages = [];
+            dungeonKeysList = [];
+            const cageIndices = [];
+            for(let i=1; i<=5; i++) {
+                cageIndices.push(Math.floor((path.length - 1) * i / 6));
+            }
+
+            for(let i=0; i<5; i++) {
+                const cageCell = path[cageIndices[i]];
+                dungeonCages.push({ 
+                    gridX: cageCell[0], gridY: cageCell[1], active: true,
+                    x: cageCell[0]*dungeonCellSize, y: cageCell[1]*dungeonCellSize,
+                    width: dungeonCellSize, height: dungeonCellSize 
+                });
+
+                // Find valid spots for the key (branches off the solution path BEFORE this cage)
+                const startIdx = i === 0 ? 0 : cageIndices[i-1] + 1;
+                const endIdx = cageIndices[i] - 1;
+
+                let validSpots = [];
+                let q2 = [];
+                let v2 = new Set();
+
+                for(let j=startIdx; j<=endIdx; j++) {
+                    q2.push(path[j]);
+                    v2.add(`${path[j][0]},${path[j][1]}`);
+                }
+
+                while(q2.length > 0) {
+                    let curr = q2.shift();
+                    let isMainPath = path.some(p => p[0]===curr[0] && p[1]===curr[1]);
+                    if(!isMainPath || validSpots.length === 0) validSpots.push(curr);
+
+                    const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                    for (let [dx, dy] of dirs) {
+                        const nx = curr[0] + dx, ny = curr[1] + dy;
+                        if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !v2.has(`${nx},${ny}`)) {
+                            let isCage = dungeonCages.some(c => c.gridX === nx && c.gridY === ny);
+                            if(!isCage) {
+                                v2.add(`${nx},${ny}`);
+                                q2.push([nx, ny]);
+                            }
+                        }
+                    }
+                }
+
+                // Prefer non-main path spots if available
+                let offPathSpots = validSpots.filter(spot => !path.some(p => p[0]===spot[0] && p[1]===spot[1]));
+                let chosenSpots = offPathSpots.length > 0 ? offPathSpots : validSpots;
+                if (chosenSpots.length > 1) chosenSpots = chosenSpots.filter(spot => !(spot[0]===1 && spot[1]===1));
+                
+                let chosen = chosenSpots[Math.floor(Math.random() * chosenSpots.length)];
+                dungeonKeysList.push({ 
+                    gridX: chosen[0], gridY: chosen[1], collected: false,
+                    x: chosen[0]*dungeonCellSize + 10, y: chosen[1]*dungeonCellSize + 10,
+                    width: 20, height: 20 
+                });
+            }
+
+            dungeonPlayer = {
+                x: 1 * dungeonCellSize + 5, y: 1 * dungeonCellSize + 5,
+                width: 30, height: 30, speed: 4, direction: 1
+            };
+
+            dungeonExit = {
+                x: (dungeonCols - 2) * dungeonCellSize, y: (dungeonRows - 2) * dungeonCellSize,
+                width: dungeonCellSize, height: dungeonCellSize, glow: 0
+            };
+        }
+        
+        function switchToMap() {
+            gameState = 'map';
+            levelIndicatorEl.textContent = 'Level: Map';
+            ammoIndicatorEl.textContent = 'Ammo: -';
+            instructionTextEl.textContent = 'Space to Select';
+            messageBox.style.display = 'none';
+            // Return player specifically near Boss level node (Level 10 is index 9)
+            if (currentLevel === config.maxLevels && mapPlayer) {
+                mapPlayer.x = levelNodes[9].x;
+                mapPlayer.y = levelNodes[9].y;
+            }
+        }
+
+        class SeededRandom { constructor(seed) { this.seed = seed; } next() { this.seed = (this.seed * 1664525 + 1013904223) % 2**32; return this.seed / 2**32; } }
+
+        function generateLevel(levelNum) {
+            const random = new SeededRandom(levelNum);
+            const levelConf = levelConfigs[levelNum - 1];
+            config.levelWidth = levelConf.width;
+            platforms = []; gems = []; enemies = []; boss = null; key = null; backgroundMountains = [];
+            
+            for (let i = 0; i < config.levelWidth; i += 300) {
+                backgroundMountains.push({ x: i + random.next() * 100, y: 550, width: 200 + random.next() * 200, height: 100 + random.next() * 250 });
+            }
+
+            const maxJumpHeight = 150, maxJumpWidth = 220;
+            const startPlatform = { x: 0, y: 550, width: 300, height: 50 };
+            platforms.push(startPlatform);
+            let platformFrontier = [startPlatform], currentX = startPlatform.width;
+            while (currentX < config.levelWidth) {
+                const gap = 50 + random.next() * 23; currentX += gap;
+                const platformWidth = 250 + random.next() * 400;
+                const newGroundPlatform = { x: currentX, y: 550, width: platformWidth, height: 50 };
+                platforms.push(newGroundPlatform); platformFrontier.push(newGroundPlatform); currentX += platformWidth;
+            }
+            const possibleY = [450, 350, 250], possibleWidths = [100, 150, 200, 250];
+            let placedFloaters = 0, generationTries = 0;
+            while (placedFloaters < levelConf.floaters && generationTries < 500) {
+                generationTries++;
+                const basePlatform = platformFrontier[Math.floor(random.next() * platformFrontier.length)];
+                const pWidth = possibleWidths[Math.floor(random.next() * possibleWidths.length)];
+                const pY = basePlatform.y - (50 + random.next() * (maxJumpHeight - 50));
+                const targetY = possibleY.reduce((prev, curr) => (Math.abs(curr - pY) < Math.abs(prev - pY) ? curr : prev));
+                const direction = random.next() < 0.5 ? -1 : 1;
+                const xOffset = (pWidth / 2) + random.next() * (maxJumpWidth - pWidth);
+                const pX = (basePlatform.x + basePlatform.width / 2) + (direction * xOffset);
+                const candidatePlatform = { x: Math.floor(pX / 50) * 50, y: targetY, width: pWidth, height: 20 };
+                let overlaps = false;
+                for (const p of platforms) { if (checkCollision({ x: candidatePlatform.x - 20, y: candidatePlatform.y - 20, width: candidatePlatform.width + 40, height: candidatePlatform.height + 40 }, p)) { overlaps = true; break; } }
+                if (!overlaps && candidatePlatform.x > 0 && candidatePlatform.x + candidatePlatform.width < config.levelWidth) { platforms.push(candidatePlatform); platformFrontier.push(candidatePlatform); placedFloaters++; }
+            }
+            for (let i = 0; i < levelConf.gems; i++) {
+                if (platforms.length === 0) break;
+                const placementType = random.next(), type = random.next() < 0.2 ? 'blue' : 'yellow';
+                let placed = false, tries = 0;
+                while (!placed && tries < 50) {
+                    tries++;
+                    if (placementType < 0.4) { const p = platforms[Math.floor(random.next() * platforms.length)]; gems.push({ x: p.x + p.width / 2 - 10, y: p.y - 40, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; }
+                    else if (placementType < 0.7) { const p = platforms[Math.floor(random.next() * platforms.length)]; const side = random.next() < 0.5 ? 'left' : 'right'; gems.push({ x: (side === 'left') ? p.x - 40 : p.x + p.width + 20, y: p.y - 20, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; }
+                    else { const p1 = platforms[Math.floor(random.next() * platforms.length)]; const p2 = platforms[Math.floor(random.next() * platforms.length)]; if (p1 !== p2 && Math.abs(p1.y - p2.y) < 100) { const [leftP, rightP] = p1.x < p2.x ? [p1, p2] : [p2, p1]; const gap = rightP.x - (leftP.x + leftP.width); if (gap > 50 && gap < 220) { gems.push({ x: (leftP.x + leftP.width) + gap / 2 - 10, y: Math.min(p1.y, p2.y) - 80, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; } } }
+                }
+                if (!placed) i--;
+            }
+            if (currentLevel === config.maxLevels) {
+                const startX = config.levelWidth - 600;
+                const startY = 400;
+                boss = { x: startX, y: startY, startX: startX, startY: startY, width: 70, height: 85, hp: 5, dx: 0, dy: 0, onGround: false, jumpTimer: 0, jumpCooldown: 120, isDefeated: false };
+                key = { x: boss.x + boss.width + 70, y: 510, width: 20, height: 20, collected: false };
+            }
+            else { const groundPlatforms = platforms.filter(p => p.y === 550 && p.width > 250); for (let i = 0; i < levelConf.enemies; i++) { if (groundPlatforms.length === 0) break; const p = groundPlatforms[Math.floor(random.next() * groundPlatforms.length)]; const patrolRange = 100 + random.next() * 100; const startX = p.x + random.next() * (p.width - patrolRange); enemies.push({ x: startX, y: 510, width: 40, height: 40, direction: 1, startX: startX, range: patrolRange }); } }
+            door = { x: config.levelWidth - 150, y: 450, width: 60, height: 100 };
+            platforms.push({x: config.levelWidth - 200, y: 550, width: 200, height: 50});
+        }
+
+        // --- Input Handling ---
+        function handleKeyDown(e) {
+            const keyName = e.key;
+            if (gameState === 'map') {
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') keys.down = true;
+            } else if (gameState === 'level') {
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+            } else if (gameState === 'dungeon') {
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') keys.down = true;
+            }
+            if (keyName === ' ' || keyName === 'Spacebar') {
+                if (!keys.space) {
+                    if (gameState === 'map' && mapPlayer.selectedNode !== null) {
+                        startLevel(mapPlayer.selectedNode + 1);
+                    } else if (gameState === 'level') {
+                        shoot();
+                    }
+                }
+                keys.space = true;
+            }
+        }
+        function handleKeyUp(e) {
+            const keyName = e.key;
+            if (keyName === 'ArrowLeft') keys.left = false;
+            if (keyName === 'ArrowRight') keys.right = false;
+            if (keyName === 'ArrowUp') keys.up = false;
+            if (keyName === 'ArrowDown') keys.down = false;
+            if (keyName === ' ' || keyName === 'Spacebar') keys.space = false;
+        }
+
+        function shoot() {
+            if (player.ammo > 0) {
+                player.ammo--;
+                ammoIndicatorEl.textContent = `Ammo: ${player.ammo}`;
+                bullets.push({ x: player.x + (player.direction === 1 ? player.width : -10), y: player.y + player.height / 2 - 5, width: 10, height: 10, direction: player.direction });
+            }
+        }
+
+        // --- Update Functions ---
+        function updateMap() {
+            if (keys.up) {
+                mapPlayer.vx += Math.cos(mapPlayer.angle) * mapPlayer.thrust;
+                mapPlayer.vy += Math.sin(mapPlayer.angle) * mapPlayer.thrust;
+            }
+            if (keys.left) { mapPlayer.angle -= 0.05; }
+            if (keys.right) { mapPlayer.angle += 0.05; }
+
+            mapPlayer.vx *= mapPlayer.friction;
+            mapPlayer.vy *= mapPlayer.friction;
+            mapPlayer.x += mapPlayer.vx;
+            mapPlayer.y += mapPlayer.vy;
+
+            // Screen wrap
+            if (mapPlayer.x > canvas.width + 15) mapPlayer.x = -15;
+            if (mapPlayer.x < -15) mapPlayer.x = canvas.width + 15;
+            if (mapPlayer.y > canvas.height + 15) mapPlayer.y = -15;
+            if (mapPlayer.y < -15) mapPlayer.y = canvas.height + 15;
+
+            // Check for level selection
+            mapPlayer.selectedNode = null;
+            levelNodes.forEach((node, i) => {
+                const dx = mapPlayer.x - node.x;
+                const dy = mapPlayer.y - node.y;
+                if (Math.sqrt(dx * dx + dy * dy) < 30) {
+                    mapPlayer.selectedNode = i;
+                }
+            });
+
+            stars.forEach(star => { star.alpha += Math.random() > 0.5 ? 0.05 : -0.05; if (star.alpha < 0.2) star.alpha = 0.2; if (star.alpha > 1) star.alpha = 1; });
+        }
+
+        function updateLevel() {
+            if (doorAnimation.active) {
+                doorAnimation.timer++;
+                const progress = doorAnimation.timer / doorAnimation.duration;
+                player.x = doorAnimation.startX + (door.x + door.width / 2 - doorAnimation.startX) * progress;
+                player.y = doorAnimation.startY + (door.y + door.height / 2 - doorAnimation.startY) * progress;
+                player.width = doorAnimation.startW * (1 - progress);
+                player.height = doorAnimation.startH * (1 - progress);
+
+                if (doorAnimation.timer >= doorAnimation.duration) {
+                    doorAnimation.active = false;
+                    if (currentLevel === config.maxLevels) {
+                        showMessage("You beat the game!", true, true);
+                    } else {
+                        showMessage(`Level ${currentLevel} Complete!`, true);
+                    }
+                }
+                return;
+            }
+
+            if (!gameActive) return;
+            doorGlow = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+            player.dx = 0;
+            if (keys.left) { player.dx = -config.playerSpeed; player.direction = -1; }
+            if (keys.right) { player.dx = config.playerSpeed; player.direction = 1; }
+            if (keys.up && player.onGround) { player.dy = -config.jumpForce; player.onGround = false; }
+            player.dy += config.gravity;
+            player.onGround = false;
+            let nextX = player.x + player.dx, nextY = player.y + player.dy;
+            platforms.forEach(p => {
+                if (nextX < p.x + p.width && nextX + player.width > p.x && player.y < p.y + p.height && player.y + player.height > p.y) { nextX = player.x; }
+                if (player.x < p.x + p.width && player.x + player.width > p.x && nextY < p.y + p.height && nextY + player.height > p.y) {
+                    if (player.dy > 0 && player.y + player.height <= p.y) { nextY = p.y - player.height; player.dy = 0; player.onGround = true; } 
+                    else if (player.dy < 0 && player.y >= p.y + p.height) { nextY = p.y + p.height; player.dy = 0; }
+                }
+            });
+            player.x = nextX; player.y = nextY;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > config.levelWidth) player.x = config.levelWidth - player.width;
+            if (player.y > canvas.height) { showMessage("You fell!", false); }
+            gems.forEach(gem => { if (!gem.collected && checkCollision(player, gem)) { gem.collected = true; score += (gem.type === 'blue' ? 20 : 10); scoreEl.textContent = `Score: ${score}`; } });
+            if (key && !key.collected && checkCollision(player, key)) { key.collected = true; playerHasKey = true; }
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i]; b.x += config.bulletSpeed * b.direction; let removed = false;
+                for (let j = enemies.length - 1; j >= 0; j--) { if (checkCollision(b, enemies[j])) { enemies.splice(j, 1); bullets.splice(i, 1); removed = true; score += 5; scoreEl.textContent = `Score: ${score}`; break; } }
+                if (removed) continue;
+                if (boss && !boss.isDefeated && checkCollision(b, boss)) {
+                    boss.hp--; bullets.splice(i, 1); removed = true;
+                    if (boss.hp <= 0) {
+                        boss.isDefeated = true;
+                        score += 30;
+                        scoreEl.textContent = `Score: ${score}`;
+                    }
+                }
+                if (removed) continue;
+                if (b.x > camera.x + canvas.width || b.x < camera.x) { bullets.splice(i, 1); }
+            }
+            enemies.forEach(e => {
+                let canMove = true; const moveAmount = config.enemySpeed * e.direction; const nextEnemyX = e.x + moveAmount; const nextEnemyBox = { ...e, x: nextEnemyX };
+                if (checkCollision(player, nextEnemyBox)) {
+                    const nextPlayerBox = { ...player, x: player.x + moveAmount }; let playerBlocked = false;
+                    for (const p of platforms) { if (checkCollision(nextPlayerBox, p)) { playerBlocked = true; break; } }
+                    if (playerBlocked) { canMove = false; } else { player.x += moveAmount; }
+                }
+                if (canMove) { e.x = nextEnemyX; }
+                if (e.x < e.startX || e.x > e.startX + e.range) { e.direction *= -1; }
+            });
+            
+            if (boss && !boss.isDefeated) {
+                // Chase Logic
+                const chaseSpeed = 1.5;
+                if (player.x > boss.x + boss.width) boss.dx = chaseSpeed;
+                else if (player.x < boss.x) boss.dx = -chaseSpeed;
+                else boss.dx = 0;
+                
+                boss.x += boss.dx;
+
+                // Gravity and platform collision
+                boss.dy += config.gravity;
+                boss.y += boss.dy;
+                boss.onGround = false;
+                platforms.forEach(p => {
+                    if (checkCollision(boss, p) && boss.y + boss.height <= p.y + 20) {
+                        boss.y = p.y - boss.height;
+                        boss.dy = 0;
+                        boss.onGround = true;
+                    }
+                });
+                
+                // Jumping AI
+                boss.jumpTimer++;
+                if (boss.onGround && boss.jumpTimer > boss.jumpCooldown) {
+                    boss.dy = -config.jumpForce * 1.1;
+                    boss.onGround = false;
+                    boss.jumpTimer = 0;
+                }
+                
+                // Off-screen reset
+                if (boss.x + boss.width < camera.x - 50 || boss.x > camera.x + canvas.width + 50) {
+                    boss.x = boss.startX;
+                    boss.y = boss.startY;
+                    boss.dy = 0;
+                }
+
+                // Player collision - Triggers Dungeon
+                if (checkCollision(player, boss)) {
+                    startDungeon();
+                }
+            }
+
+            if (doorMessage.timer > 0) { doorMessage.timer--; }
+            camera.x = player.x - canvas.width / 2 + player.width / 2;
+            if (camera.x < 0) camera.x = 0; if (camera.x > config.levelWidth - canvas.width) camera.x = config.levelWidth - canvas.width;
+            
+            if (checkCollision(player, door)) {
+                let canEnter = false;
+                if (currentLevel === config.maxLevels) {
+                    if (playerHasKey) { canEnter = true; } 
+                    else { doorMessage = { text: "You need the key!", timer: 120 }; }
+                } else {
+                    canEnter = true;
+                }
+
+                if (canEnter && !doorAnimation.active) {
+                    gameActive = false;
+                    doorAnimation.active = true;
+                    doorAnimation.timer = 0;
+                    doorAnimation.startX = player.x;
+                    doorAnimation.startY = player.y;
+                    doorAnimation.startW = player.width;
+                    doorAnimation.startH = player.height;
+                }
+            }
+        }
+
+        function updateDungeon() {
+            if (!gameActive) return;
+
+            let dx = 0, dy = 0;
+            if (keys.left) { dx = -dungeonPlayer.speed; dungeonPlayer.direction = -1; }
+            if (keys.right) { dx = dungeonPlayer.speed; dungeonPlayer.direction = 1; }
+            if (keys.up) dy = -dungeonPlayer.speed;
+            if (keys.down) dy = dungeonPlayer.speed;
+
+            function isWallColliding(x, y) {
+                let corners = [
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)}
+                ];
+                return corners.some(c => !dungeonGrid[c.cx] || dungeonGrid[c.cx][c.cy] === 1);
+            }
+
+            if (dx !== 0) {
+                let oldX = dungeonPlayer.x;
+                dungeonPlayer.x += dx;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.x = oldX;
+            }
+            if (dy !== 0) {
+                let oldY = dungeonPlayer.y;
+                dungeonPlayer.y += dy;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.y = oldY;
+            }
+
+            // Collisions with keys
+            dungeonKeysList.forEach(k => {
+                if (!k.collected && checkCollision(dungeonPlayer, k)) {
+                    k.collected = true;
+                    dungeonKeysCount++;
+                    ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                }
+            });
+
+            // Collisions with cages
+            dungeonCages.forEach(c => {
+                if (c.active && checkCollision(dungeonPlayer, c)) {
+                    if (dungeonKeysCount > 0) {
+                        dungeonKeysCount--;
+                        c.active = false;
+                        ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                    } else {
+                        isFullRestartMode = true;
+                        showMessage("Game Over!", false);
+                        messageText.textContent = "Caught in a Cage! No Keys Left.";
+                        restartButton.textContent = "Restart Game";
+                        nextLevelButton.style.display = 'none';
+                    }
+                }
+            });
+
+            // Exit collision
+            if (checkCollision(dungeonPlayer, dungeonExit)) {
+                switchToMap();
+            }
+
+            // Camera bounds (center on player)
+            camera.x = dungeonPlayer.x - canvas.width / 2 + dungeonPlayer.width / 2;
+            camera.y = dungeonPlayer.y - canvas.height / 2 + dungeonPlayer.height / 2;
+            
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > dungeonCols * dungeonCellSize - canvas.width) camera.x = dungeonCols * dungeonCellSize - canvas.width;
+            if (camera.y > dungeonRows * dungeonCellSize - canvas.height) camera.y = dungeonRows * dungeonCellSize - canvas.height;
+        }
+
+        // --- Draw Functions ---
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(star => { ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2); ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`; ctx.fill(); });
+            
+            levelNodes.forEach((node, i) => {
+                const levelNum = i + 1; const isComplete = completedLevels.includes(levelNum);
+                if (mapPlayer.selectedNode === i) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 25, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = isComplete ? '#53bf9d' : node.c1; ctx.beginPath(); ctx.arc(node.x, node.y, 20, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = isComplete ? '#2c7b67' : node.c2; ctx.beginPath(); ctx.arc(node.x + 5, node.y - 5, 18, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = "16px 'Press Start 2P'"; ctx.textAlign = "center"; ctx.fillText(levelNum, node.x, node.y + 6);
+            });
+            
+            ctx.save(); 
+            ctx.translate(mapPlayer.x, mapPlayer.y); 
+            ctx.rotate(mapPlayer.angle + Math.PI / 2); // Adjust rotation to point forward
+            
+            if (keys.up) {
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.moveTo(0, 15);
+                ctx.lineTo(5 + Math.random() * 3, 25 + Math.random() * 5);
+                ctx.lineTo(-5 - Math.random() * 3, 25 + Math.random() * 5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.moveTo(0, 15);
+                ctx.lineTo(3 + Math.random() * 2, 20 + Math.random() * 3);
+                ctx.lineTo(-3 - Math.random() * 2, 20 + Math.random() * 3);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.fillStyle = '#e94560';
+            ctx.beginPath();
+            ctx.moveTo(-8, 0);
+            ctx.lineTo(-18, 15);
+            ctx.lineTo(-8, 10);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(8, 0);
+            ctx.lineTo(18, 15);
+            ctx.lineTo(8, 10);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#adb5bd';
+            ctx.beginPath();
+            ctx.moveTo(0, -20);
+            ctx.quadraticCurveTo(10, -5, 8, 15);
+            ctx.lineTo(-8, 15);
+            ctx.quadraticCurveTo(-10, -5, 0, -20);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#4a90e2';
+            ctx.beginPath();
+            ctx.arc(0, -5, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+
+            ctx.fillStyle = 'white'; ctx.font = "20px 'Press Start 2P'"; ctx.textAlign = "center"; ctx.fillText("Select a Planet", canvas.width / 2, 50);
+        }
+
+        function drawLevel() {
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#000010'); skyGradient.addColorStop(0.5, '#16213e'); skyGradient.addColorStop(1, '#4a90e2');
+            ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); ctx.translate(-camera.x * 0.5, 0); drawPlanetBackground(); ctx.restore();
+            ctx.save(); ctx.translate(-camera.x, -camera.y);
+            platforms.forEach(drawPlatform);
+            gems.forEach(gem => { if (!gem.collected) drawGem(gem); });
+            bullets.forEach(drawBullet);
+            enemies.forEach(drawEnemy);
+            if (boss && !boss.isDefeated) { drawBoss(boss); }
+            if (key && !key.collected) { drawKey(key); }
+            if (currentLevel === config.maxLevels) { drawFinalDoor(door); } else { drawDoor(door); }
+            drawPlayer(player);
+            ctx.restore();
+            if (doorMessage.timer > 0) {
+                ctx.fillStyle = "rgba(255, 255, 0, " + (doorMessage.timer / 120) + ")";
+                ctx.font = "20px 'Press Start 2P'"; ctx.textAlign = "center";
+                ctx.fillText(doorMessage.text, canvas.width / 2, 100);
+            }
+        }
+
+        function drawDungeon() {
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            let startCol = Math.floor(camera.x / dungeonCellSize);
+            let endCol = startCol + (canvas.width / dungeonCellSize) + 1;
+            let startRow = Math.floor(camera.y / dungeonCellSize);
+            let endRow = startRow + (canvas.height / dungeonCellSize) + 1;
+
+            for(let i=Math.max(0, startCol); i<Math.min(dungeonCols, endCol); i++) {
+                for(let j=Math.max(0, startRow); j<Math.min(dungeonRows, endRow); j++) {
+                    if (dungeonGrid[i][j] === 1) {
+                        ctx.fillStyle = '#2b2b36';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                        ctx.strokeStyle = '#111';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    } else {
+                        ctx.fillStyle = '#414152';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    }
+                }
+            }
+
+            dungeonExit.glow = (dungeonExit.glow || 0) + 0.1;
+            ctx.fillStyle = `rgba(83, 191, 157, ${0.5 + Math.sin(dungeonExit.glow)*0.3})`;
+            ctx.beginPath();
+            ctx.arc(dungeonExit.x + dungeonCellSize/2, dungeonExit.y + dungeonCellSize/2, dungeonCellSize/2 - 5, 0, Math.PI*2);
+            ctx.fill();
+
+            dungeonKeysList.forEach(k => { if(!k.collected) drawDungeonKey(k); });
+            dungeonCages.forEach(c => { if(c.active) drawDungeonCage(c); });
+
+            drawPlayer({
+                x: dungeonPlayer.x, y: dungeonPlayer.y,
+                width: dungeonPlayer.width, height: dungeonPlayer.height,
+                direction: dungeonPlayer.direction,
+                onGround: true, // Tell the stick figure animation we are top-down (not jumping)
+                isMoving: (keys.left || keys.right || keys.up || keys.down) // Provide walking cycle context
+            });
+
+            ctx.restore();
+        }
+
+        // --- Game Loop ---
+        let gameLoopId;
+        function gameLoop() {
+            if (gameState === 'map') {
+                updateMap();
+                drawMap();
+            } else if (gameState === 'level') {
+                updateLevel();
+                drawLevel();
+            } else if (gameState === 'dungeon') {
+                updateDungeon();
+                drawDungeon();
+            }
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function checkCollision(r1, r2) { return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x && r1.y < r2.y + r2.height && r1.y + r1.height > r2.y; }
+
+        function showMessage(message, isLevelEnd, gameWon = false) {
+            gameActive = false;
+            messageText.textContent = message;
+            messageBox.style.display = 'flex';
+            if (gameWon) {
+                if (!completedLevels.includes(currentLevel)) { completedLevels.push(currentLevel); }
+                messageText.textContent = `You beat the game! Final Score: ${score}`;
+                nextLevelButton.style.display = 'none';
+                restartButton.textContent = 'Play Again?';
+                restartButton.style.display = 'block';
+                isFullRestartMode = true;
+            } else if (isLevelEnd) {
+                if (!completedLevels.includes(currentLevel)) { completedLevels.push(currentLevel); }
+                mapPlayer.x = levelNodes[currentLevel - 1].x;
+                mapPlayer.y = levelNodes[currentLevel - 1].y;
+                mapPlayer.vx = 0;
+                mapPlayer.vy = 0;
+                nextLevelButton.style.display = 'block';
+                restartButton.style.display = 'none';
+            } else {
+                nextLevelButton.style.display = 'block';
+                restartButton.style.display = 'block';
+            }
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        
+        restartButton.addEventListener('click', () => {
+            messageBox.style.display = 'none';
+            if (isFullRestartMode) {
+                initGame();
+            } else {
+                startLevel(currentLevel);
+            }
+        });
+
+        nextLevelButton.addEventListener('click', () => {
+            switchToMap();
+        });
+
+        // --- Start Game ---
+        window.onload = function() {
+            initGame();
+        }
+    </script>
+</body>
+</html>
