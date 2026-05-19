@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>House Clean Up</title>
+    <style>
+        :root {
+            --ui-bg: #f4f4f9;
+            --text-color: #333;
+            --primary: #4CAF50;
+            --primary-hover: #45a049;
+            --locked: #9e9e9e;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-color);
+        }
+
+        #app-wrapper {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 600px;
+            background: var(--ui-bg);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+            transform-origin: center center;
+        }
+
+        .view {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none;
+            flex-direction: column;
+            background: var(--ui-bg);
+        }
+
+        .view.active {
+            display: flex;
+        }
+
+        .header-bar {
+            height: 60px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 10;
+        }
+
+        h1, h2 { margin: 0; }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:active { transform: scale(0.95); }
+        button:hover { background: var(--primary-hover); }
+        button.secondary { background: #FF9800; }
+        button.secondary:hover { background: #F57C00; }
+
+        #world-map-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            background: #e8f5e9;
+            position: relative;
+        }
+
+        .house-icon {
+            width: 120px;
+            height: 140px;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .house-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .house-body {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 70%;
+            border-radius: 10px 10px 0 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .house-roof {
+            position: absolute;
+            top: 0;
+            left: -10%;
+            width: 120%;
+            height: 40%;
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+
+        .house-icon.locked {
+            filter: grayscale(100%) opacity(0.5);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .lock-symbol {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            z-index: 2;
+        }
+
+        .pointer {
+            position: absolute;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 40px;
+            animation: bounce 1s infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes bounce {
+            0%, 100% { top: -50px; }
+            50% { top: -30px; }
+        }
+
+        #house-map-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff3e0;
+        }
+
+        .room-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .room-card {
+            width: 150px;
+            height: 150px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+            border: 4px solid transparent;
+        }
+
+        .room-card:hover { transform: scale(1.05); }
+        .room-card.locked { filter: grayscale(100%) opacity(0.6); pointer-events: none; }
+        .room-card.completed { border-color: var(--primary); }
+        .room-card-icon { font-size: 50px; margin-bottom: 10px; }
+        .room-card-title { font-weight: bold; }
+
+        #room-scene {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #ececec;
+        }
+
+        .room-element { position: absolute; }
+        
+        .dropzone {
+            position: absolute;
+            transition: background 0.3s;
+        }
+
+        .drag-item {
+            position: absolute;
+            font-size: 50px;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            width: 60px;
+            height: 60px;
+        }
+
+        .drag-item:active { cursor: grabbing; transform: scale(1.1); }
+        .drag-item.placed { pointer-events: none; }
+
+        .cupboard-door {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background: #deb887;
+            border: 2px solid #8b4513;
+            transition: transform 0.5s ease;
+            cursor: pointer;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+        }
+        .cupboard-door::after {
+            content: ''; position: absolute; width: 10px; height: 20px; background: #5c3a18; border-radius: 2px;
+        }
+        .cupboard-door.left { left: 0; transform-origin: left; }
+        .cupboard-door.left::after { right: 5px; }
+        .cupboard-door.right { right: 0; transform-origin: right; }
+        .cupboard-door.right::after { left: 5px; }
+        .cupboard-door.open { transform: perspective(400px) rotateY(100deg); }
+        .cupboard-door.right.open { transform: perspective(400px) rotateY(-100deg); }
+
+        .carpet-fold {
+            position: absolute;
+            top: 0; right: 0;
+            width: 0; height: 0;
+            border-style: solid;
+            border-width: 0 80px 80px 0;
+            border-color: transparent #fff transparent transparent;
+            cursor: pointer;
+            transition: opacity 0.3s;
+            z-index: 5;
+            filter: drop-shadow(-2px 2px 2px rgba(0,0,0,0.3));
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .overlay.visible { display: flex; opacity: 1; }
+        
+        .modal {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .overlay.visible .modal { transform: scale(1); }
+        .modal h2 { margin-bottom: 20px; font-size: 28px; color: var(--primary); }
+        
+    </style>
+</head>
+<body>
+
+    <div id="app-wrapper">
+        <div id="game-container">
+            
+            <!-- WORLD MAP VIEW -->
+            <div id="view-world" class="view active">
+                <div class="header-bar">
+                    <h1>Neighborhood</h1>
+                    <button onclick="restartGame()">Restart Game</button>
+                </div>
+                <div id="world-map-content">
+                    <!-- Houses injected via JS -->
+                </div>
+            </div>
+
+            <!-- HOUSE MAP VIEW -->
+            <div id="view-house" class="view">
+                <div class="header-bar">
+                    <h1 id="house-title">House</h1>
+                    <button class="secondary" onclick="showWorld()">Back to Map</button>
+                </div>
+                <div id="house-map-content">
+                    <h2>Select a room to clean</h2>
+                    <div id="room-grid" class="room-grid">
+                        <!-- Rooms injected via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROOM SCENE VIEW -->
+            <div id="view-room" class="view">
+                <div class="header-bar">
+                    <h1 id="room-title">Room</h1>
+                    <div>
+                        <button class="secondary" onclick="resetCurrentRoom()" style="margin-right: 10px;">Reset Mess</button>
+                        <button onclick="showHouse()">Back</button>
+                    </div>
+                </div>
+                <div id="room-scene">
+                    <!-- Dynamic Room Environment injected via JS -->
+                </div>
+            </div>
+
+            <!-- SUCCESS MODALS -->
+            <div id="success-overlay" class="overlay">
+                <div class="modal">
+                    <h2 id="success-title">Room Clean!</h2>
+                    <p id="success-desc">Great job putting everything away.</p>
+                    <button onclick="handleSuccessContinue()">Continue</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Define all rooms and their interactive setups
+        const ROOM_CONFIGS = {
+            playroom: {
+                title: "Playroom", icon: "🎲",
+                bg: "linear-gradient(to bottom, #a0e0ff 65%, #e0c0a0 65%)",
+                elements: [
+                    { id: "toybox", class: "dropzone", x: 550, y: 380, w: 200, h: 180, css: "background: #8b5a2b; border: 8px solid #5c3a18; border-radius: 10px; border-top: none; box-shadow: inset 0 -20px 30px rgba(0,0,0,0.5);" }
+                ],
+                items: [
+                    { id: "toy1", icon: "🧸", x: 100, y: 480, target: "toybox" },
+                    { id: "toy2", icon: "🚗", x: 250, y: 520, target: "toybox" },
+                    { id: "toy3", icon: "⚽", x: 150, y: 420, target: "toybox" },
+                    { id: "toy4", icon: "🚂", x: 400, y: 490, target: "toybox" }
+                ],
+                setup: () => {} 
+            },
+            library: {
+                title: "Library", icon: "📚",
+                bg: "linear-gradient(to bottom, #deb887 65%, #8b4513 65%)",
+                elements: [
+                    { id: "bookshelf", class: "dropzone", x: 250, y: 150, w: 300, h: 370, css: "background: #5c3a18; border: 12px solid #3e2723; display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;" },
+                    { x: 250, y: 270, w: 300, h: 10, css: "background: #3e2723;" }, // Shelf line
+                    { x: 250, y: 390, w: 300, h: 10, css: "background: #3e2723;" }  // Shelf line
+                ],
+                items: [
+                    { id: "book1", icon: "📕", x: 100, y: 500, target: "bookshelf" },
+                    { id: "book2", icon: "📘", x: 600, y: 480, target: "bookshelf" },
+                    { id: "book3", icon: "📗", x: 150, y: 430, target: "bookshelf" },
+                    { id: "book4", icon: "📙", x: 650, y: 520, target: "bookshelf" }
+                ],
+                setup: () => {}
+            },
+            bathroom: {
+                title: "Bathroom", icon: "🛁",
+                bg: "linear-gradient(135deg, #e0f7fa 25%, #b2ebf2 25%, #b2ebf2 50%, #e0f7fa 50%, #e0f7fa 75%, #b2ebf2 75%, #b2ebf2 100%)",
+                bgSize: "40px 40px",
+                elements: [
+                    { x: 0, y: 390, w: 800, h: 210, css: "background: #cfd8dc; border-top: 5px solid #90a4ae;" }, // Floor
+                    { id: "counter", class: "dropzone", x: 100, y: 300, w: 250, h: 30, css: "background: #fafafa; border: 2px solid #ccc; border-radius: 5px;" },
+                    { x: 150, y: 300, w: 150, h: 60, css: "background: #e0e0e0; border-radius: 0 0 75px 75px;" }, // Sink basin
+                    { id: "towelrack", class: "dropzone", x: 550, y: 200, w: 150, h: 15, css: "background: #bdbdbd; border-radius: 10px; box-shadow: 0 5px 10px rgba(0,0,0,0.1);" }
+                ],
+                items: [
+                    { id: "soap", icon: "🧼", x: 200, y: 330, target: "counter" }, // In sink
+                    { id: "brush", icon: "🪥", x: 250, y: 480, target: "counter" }, // Floor
+                    { id: "paste", icon: "🧴", x: 350, y: 520, target: "counter" }, // Floor
+                    { id: "towel", icon: "🧻", x: 600, y: 450, target: "towelrack" } // Floor (Using paper towel emoji to represent towel)
+                ],
+                setup: () => {
+                    document.getElementById('room-scene').style.backgroundSize = ROOM_CONFIGS.bathroom.bgSize;
+                }
+            },
+            kitchen: {
+                title: "Kitchen", icon: "🍳",
+                bg: "#fff9c4",
+                elements: [
+                    { x: 0, y: 400, w: 800, h: 200, css: "background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 40px 40px;" }, // Checkered Floor
+                    { x: 100, y: 380, w: 600, h: 30, css: "background: #757575; border-radius: 5px;" }, // Countertop
+                    { x: 200, y: 380, w: 200, h: 60, css: "background: #e0e0e0; border-radius: 0 0 20px 20px;" }, // Sink
+                    { x: 500, y: 340, w: 150, h: 40, css: "background: #9e9e9e; border-radius: 5px; opacity: 0.8;" }, // Drying Rack
+                    { id: "cupboard", class: "dropzone", x: 200, y: 100, w: 300, h: 160, css: "background: #3e2723;" }, // Inside cupboard
+                ],
+                items: [
+                    { id: "bowl1", icon: "🥣", x: 510, y: 320, target: "cupboard" },
+                    { id: "bowl2", icon: "🥣", x: 560, y: 320, target: "cupboard" },
+                    { id: "plate1", icon: "🍽️", x: 600, y: 310, target: "cupboard" },
+                    { id: "plate2", icon: "🍽️", x: 620, y: 310, target: "cupboard" }
+                ],
+                setup: (scene) => {
+                    scene.style.backgroundSize = "auto";
+                    // Add interactive doors
+                    const cb = document.getElementById('cupboard');
+                    const leftDoor = document.createElement('div');
+                    leftDoor.className = 'cupboard-door left';
+                    const rightDoor = document.createElement('div');
+                    rightDoor.className = 'cupboard-door right';
+                    
+                    const toggleDoor = (e) => {
+                        e.target.classList.toggle('open');
+                        checkWinCondition(); // Check in case things were dropped while closed, but standard mechanic assumes open
+                    };
+                    leftDoor.onclick = toggleDoor;
+                    rightDoor.onclick = toggleDoor;
+                    
+                    cb.appendChild(leftDoor);
+                    cb.appendChild(rightDoor);
+                }
+            },
+            livingroom: {
+                title: "Living Room", icon: "🛋️",
+                bg: "linear-gradient(to bottom, #dcedc8 60%, #8d6e63 60%)",
+                elements: [
+                    { id: "couch", class: "dropzone", x: 200, y: 250, w: 400, h: 150, css: "background: #5d4037; border-radius: 20px; box-shadow: inset 0 20px rgba(0,0,0,0.2);" },
+                    { id: "carpet", x: 150, y: 440, w: 500, h: 120, css: "background: #c62828; border: 4px solid #b71c1c;" }
+                ],
+                items: [
+                    { id: "cushion1", icon: "🟪", x: 100, y: 480, target: "couch" },
+                    { id: "cushion2", icon: "🟪", x: 680, y: 450, target: "couch" },
+                    { id: "blanket", icon: "🟫", x: 350, y: 520, target: "couch" }
+                ],
+                setup: (scene) => {
+                    scene.style.backgroundSize = "auto";
+                    const carpet = document.getElementById('carpet');
+                    const fold = document.createElement('div');
+                    fold.className = 'carpet-fold';
+                    fold.id = 'carpet-fold';
+                    carpet.appendChild(fold);
+                    carpet.dataset.fixed = "false";
+
+                    fold.onclick = () => {
+                        fold.style.display = 'none';
+                        carpet.dataset.fixed = "true";
+                        checkWinCondition();
+                    };
+                }
+            }
+        };
+
+        const HOUSES = [
+            { id: 1, color: '#e53935', roof: '#b71c1c', rooms: ['playroom'] },
+            { id: 2, color: '#1e88e5', roof: '#0d47a1', rooms: ['playroom', 'library'] },
+            { id: 3, color: '#43a047', roof: '#1b5e20', rooms: ['playroom', 'library', 'bathroom'] },
+            { id: 4, color: '#fdd835', roof: '#f57f17', rooms: ['playroom', 'library', 'bathroom', 'kitchen'] },
+            { id: 5, color: '#8e24aa', roof: '#4a148c', rooms: ['playroom', 'library', 'bathroom', 'kitchen', 'livingroom'] }
+        ];
+
+        let gameState = {
+            unlockedHouses: 1,
+            houseProgress: {
+                1: { unlockedRooms: 1, clean: {} },
+                2: { unlockedRooms: 1, clean: {} },
+                3: { unlockedRooms: 1, clean: {} },
+                4: { unlockedRooms: 1, clean: {} },
+                5: { unlockedRooms: 1, clean: {} }
+            }
+        };
+
+        let currentHouse = null;
+        let currentRoom = null;
+        let gameScale = 1;
+
+        function updateScale() {
+            const wrapper = document.getElementById('app-wrapper');
+            const container = document.getElementById('game-container');
+            const wRatio = wrapper.clientWidth / 800;
+            const hRatio = wrapper.clientHeight / 600;
+            gameScale = Math.min(wRatio, hRatio) * 0.95; 
+            container.style.transform = `scale(${gameScale})`;
+        }
+        window.addEventListener('resize', updateScale);
+        updateScale(); // Init scale
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        function showWorld() {
+            renderWorldMap();
+            switchView('view-world');
+        }
+
+        function showHouse() {
+            renderHouseMap();
+            switchView('view-house');
+        }
+
+        function restartGame() {
+            gameState = {
+                unlockedHouses: 1,
+                houseProgress: { 1: { unlockedRooms: 1, clean: {} }, 2: { unlockedRooms: 1, clean: {} }, 3: { unlockedRooms: 1, clean: {} }, 4: { unlockedRooms: 1, clean: {} }, 5: { unlockedRooms: 1, clean: {} } }
+            };
+            showWorld();
+        }
+
+        function renderWorldMap() {
+            const container = document.getElementById('world-map-content');
+            container.innerHTML = '';
+
+            let pointerPlaced = false;
+
+            HOUSES.forEach(house => {
+                const isUnlocked = house.id <= gameState.unlockedHouses;
+                const icon = document.createElement('div');
+                icon.className = `house-icon ${isUnlocked ? '' : 'locked'}`;
+                
+                // House Drawing
+                icon.innerHTML = `
+                    <div class="house-roof" style="background: ${house.roof}"></div>
+                    <div class="house-body" style="background: ${house.color}"></div>
+                `;
+
+                if (!isUnlocked) {
+                    icon.innerHTML += `<div class="lock-symbol">🔒</div>`;
+                } else {
+                    icon.onclick = () => {
+                        currentHouse = house.id;
+                        showHouse();
+                    };
+                    
+                    // Add pointer to the highest unlocked house that isn't fully complete
+                    // Or simply the highest unlocked house if it's the frontier
+                    if (house.id === gameState.unlockedHouses && !pointerPlaced) {
+                        icon.innerHTML += `<div class="pointer">⬇️</div>`;
+                        pointerPlaced = true;
+                    }
+                }
+
+                container.appendChild(icon);
+            });
+        }
+
+        function renderHouseMap() {
+            document.getElementById('house-title').innerText = `House ${currentHouse}`;
+            const container = document.getElementById('room-grid');
+            container.innerHTML = '';
+
+            const houseData = HOUSES.find(h => h.id === currentHouse);
+            const progress = gameState.houseProgress[currentHouse];
+
+            houseData.rooms.forEach((roomKey, index) => {
+                const roomConfig = ROOM_CONFIGS[roomKey];
+                const isUnlocked = index < progress.unlockedRooms;
+                const isClean = progress.clean[roomKey];
+
+                const card = document.createElement('div');
+                card.className = `room-card ${isUnlocked ? '' : 'locked'} ${isClean ? 'completed' : ''}`;
+                
+                card.innerHTML = `
+                    <div class="room-card-icon">${isUnlocked ? roomConfig.icon : '🔒'}</div>
+                    <div class="room-card-title">${roomConfig.title}</div>
+                    ${isClean ? '<div style="color:var(--primary); margin-top:5px;">✅ Clean</div>' : ''}
+                `;
+
+                if (isUnlocked) {
+                    card.onclick = () => loadRoom(roomKey);
+                }
+
+                container.appendChild(card);
+            });
+        }
+
+        function loadRoom(roomKey) {
+            currentRoom = roomKey;
+            const config = ROOM_CONFIGS[roomKey];
+            document.getElementById('room-title').innerText = config.title;
+            
+            const scene = document.getElementById('room-scene');
+            scene.innerHTML = '';
+            scene.style.background = config.bg;
+
+            // Generate Static/Interactive Elements
+            config.elements.forEach(el => {
+                const div = document.createElement('div');
+                div.className = `room-element ${el.class || ''}`;
+                if (el.id) div.id = el.id;
+                div.style.left = el.x + 'px';
+                div.style.top = el.y + 'px';
+                div.style.width = el.w + 'px';
+                div.style.height = el.h + 'px';
+                if (el.css) div.style.cssText += el.css;
+                scene.appendChild(div);
+            });
+
+            // Generate Draggable Items
+            const isClean = gameState.houseProgress[currentHouse].clean[roomKey];
+            config.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `room-element drag-item ${isClean ? 'placed' : ''}`;
+                div.id = item.id;
+                div.innerText = item.icon;
+                div.dataset.target = item.target;
+                
+                if (isClean) {
+                    // Place visually in target
+                    const targetEl = config.elements.find(e => e.id === item.target);
+                    div.style.left = (targetEl.x + Math.random() * (targetEl.w - 60)) + 'px';
+                    div.style.top = (targetEl.y + Math.random() * (targetEl.h - 60)) + 'px';
+                    div.dataset.placed = "true";
+                } else {
+                    div.style.left = item.x + 'px';
+                    div.style.top = item.y + 'px';
+                    div.dataset.placed = "false";
+                }
+                
+                // Add event listeners for D&D
+                div.addEventListener('mousedown', startDrag);
+                div.addEventListener('touchstart', startDrag, {passive: false});
+                
+                scene.appendChild(div);
+            });
+
+            // Run specific room setup (e.g. cupboard doors, carpet fold)
+            config.setup(scene);
+            
+            // If already clean, adjust carpet visual for living room
+            if (isClean && roomKey === 'livingroom') {
+                const fold = document.getElementById('carpet-fold');
+                if (fold) fold.style.display = 'none';
+                document.getElementById('carpet').dataset.fixed = "true";
+            }
+
+            switchView('view-room');
+        }
+
+        let dragItem = null;
+        let startX, startY, initialLeft, initialTop;
+
+        function startDrag(e) {
+            if (e.target.dataset.placed === "true") return;
+            
+            dragItem = e.target;
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            
+            startX = clientX;
+            startY = clientY;
+            initialLeft = parseFloat(dragItem.style.left);
+            initialTop = parseFloat(dragItem.style.top);
+            
+            dragItem.style.zIndex = 1000;
+            dragItem.style.transition = 'none';
+        }
+
+        function onDrag(e) {
+            if (!dragItem) return;
+            e.preventDefault(); // Prevent scrolling on touch
+            
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            
+            // Adjust delta by the responsive scale factor
+            const dx = (clientX - startX) / gameScale;
+            const dy = (clientY - startY) / gameScale;
+            
+            dragItem.style.left = `${initialLeft + dx}px`;
+            dragItem.style.top = `${initialTop + dy}px`;
+        }
+
+        function endDrag(e) {
+            if (!dragItem) return;
+            
+            dragItem.style.zIndex = 10;
+            dragItem.style.transition = 'left 0.3s, top 0.3s';
+            
+            checkDrop(dragItem);
+            dragItem = null;
+        }
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('touchmove', onDrag, {passive: false});
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+
+        function checkDrop(item) {
+            const targetId = item.dataset.target;
+            const targetZone = document.getElementById(targetId);
+            
+            if (!targetZone) { snapBack(item); return; }
+
+            const itemRect = item.getBoundingClientRect();
+            const zoneRect = targetZone.getBoundingClientRect();
+
+            // Check bounding box intersection
+            const isOverlapping = !(
+                itemRect.right < zoneRect.left || 
+                itemRect.left > zoneRect.right || 
+                itemRect.bottom < zoneRect.top || 
+                itemRect.top > zoneRect.bottom
+            );
+
+            let success = isOverlapping;
+
+            // Specific check for Kitchen Cupboards
+            if (success && targetId === 'cupboard') {
+                const doors = targetZone.querySelectorAll('.cupboard-door');
+                let doorsOpen = false;
+                doors.forEach(d => { if(d.classList.contains('open')) doorsOpen = true; });
+                if (!doorsOpen) success = false;
+            }
+
+            if (success) {
+                // Visually lock it into the dropzone
+                item.dataset.placed = "true";
+                item.classList.add('placed');
+                
+                // Keep it where dropped, but ensure it's inside the logical coordinates of the zone
+                // Actually, letting it rest where dropped (if valid) feels more natural.
+                
+                checkWinCondition();
+            } else {
+                snapBack(item);
+            }
+        }
+
+        function snapBack(item) {
+            item.style.left = `${initialLeft}px`;
+            item.style.top = `${initialTop}px`;
+        }
+
+        let successContext = '';
+
+        function checkWinCondition() {
+            const items = document.querySelectorAll('.drag-item');
+            let allPlaced = true;
+            items.forEach(item => {
+                if (item.dataset.placed !== "true") allPlaced = false;
+            });
+
+            // Specific check for Living Room Carpet
+            if (currentRoom === 'livingroom') {
+                const carpet = document.getElementById('carpet');
+                if (carpet && carpet.dataset.fixed !== "true") allPlaced = false;
+            }
+
+            if (allPlaced) {
+                const progress = gameState.houseProgress[currentHouse];
+                progress.clean[currentRoom] = true;
+                
+                const houseData = HOUSES.find(h => h.id === currentHouse);
+                const currentRoomIndex = houseData.rooms.indexOf(currentRoom);
+                
+                let unlockedNextRoom = false;
+                let unlockedNextHouse = false;
+
+                // Unlock next room in the same house
+                if (currentRoomIndex + 1 < houseData.rooms.length) {
+                    if (progress.unlockedRooms <= currentRoomIndex + 1) {
+                        progress.unlockedRooms = currentRoomIndex + 2;
+                        unlockedNextRoom = true;
+                    }
+                } 
+                // Or unlock next house
+                else if (currentHouse < 5 && gameState.unlockedHouses === currentHouse) {
+                    gameState.unlockedHouses = currentHouse + 1;
+                    unlockedNextHouse = true;
+                }
+
+                setTimeout(() => showSuccessOverlay(unlockedNextRoom, unlockedNextHouse), 500);
+            }
+        }
+
+        function showSuccessOverlay(unlockedRoom, unlockedHouse) {
+            const overlay = document.getElementById('success-overlay');
+            const title = document.getElementById('success-title');
+            const desc = document.getElementById('success-desc');
+            
+            if (unlockedHouse) {
+                title.innerText = `House ${currentHouse} Cleaned!`;
+                desc.innerText = `You unlocked House ${currentHouse + 1}!`;
+                successContext = 'house';
+            } else if (unlockedRoom) {
+                title.innerText = `Room Clean!`;
+                desc.innerText = `You unlocked the next room in this house.`;
+                successContext = 'room';
+            } else {
+                title.innerText = `All Clean!`;
+                desc.innerText = `Everything is put away perfectly.`;
+                successContext = 'none';
+            }
+            
+            overlay.classList.add('visible');
+        }
+
+        function handleSuccessContinue() {
+            document.getElementById('success-overlay').classList.remove('visible');
+            if (successContext === 'house') {
+                showWorld();
+            } else {
+                showHouse();
+            }
+        }
+
+        function resetCurrentRoom() {
+            // Revert clean state and reload scene
+            gameState.houseProgress[currentHouse].clean[currentRoom] = false;
+            loadRoom(currentRoom);
+        }
+
+        window.onload = () => {
+            showWorld();
+        };
+
+    </script>
+</body>
+</html>
