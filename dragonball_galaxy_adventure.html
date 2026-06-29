@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dragonball Galaxy Adventure</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #game-container {
+            position: relative;
+            border: 4px solid #0f3460;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(224, 224, 224, 0.3);
+        }
+        canvas {
+            display: block;
+            background-color: #000010;
+        }
+        #info-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            padding: 10px 20px;
+            background-color: #0f3460;
+            border-top: 4px solid #f97300; /* Dragonball Orange */
+            box-sizing: border-box;
+        }
+        .info-text {
+            font-size: 16px;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(15, 52, 96, 0.9);
+            color: white;
+            padding: 40px;
+            border: 4px solid #f97300;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 24px;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #restart-button, #next-level-button {
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            color: white;
+            background-color: #f97300;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #restart-button:hover, #next-level-button:hover {
+            background-color: #ff983f;
+        }
+    </style>
+</head>
+<body>
+    <div id="info-bar">
+        <div id="score" class="info-text">Score: 0</div>
+        <div id="level-indicator" class="info-text">Level: Map</div>
+        <div id="ammo-indicator" class="info-text">Ki: -</div>
+        <div id="instruction-text" class="info-text">Space to Select</div>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div id="message-box">
+        <div id="message-text"></div>
+        <button id="next-level-button">Back to Map</button>
+        <button id="restart-button">Try Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const levelIndicatorEl = document.getElementById('level-indicator');
+        const ammoIndicatorEl = document.getElementById('ammo-indicator');
+        const instructionTextEl = document.getElementById('instruction-text');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const restartButton = document.getElementById('restart-button');
+        const nextLevelButton = document.getElementById('next-level-button');
+
+        // --- Game State & Config ---
+        let gameState = 'map'; // 'map', 'level', or 'dungeon'
+        const config = {
+            gravity: 0.6, playerSpeed: 5, jumpForce: 15, playerWidth: 40, playerHeight: 60,
+            enemySpeed: 2, bulletSpeed: 10, maxLevels: 10
+        };
+        const levelConfigs = [
+            { width: 2000, enemies: 1, gems: 5, floaters: 3 }, { width: 2200, enemies: 2, gems: 7, floaters: 4 },
+            { width: 2400, enemies: 2, gems: 8, floaters: 5 }, { width: 2600, enemies: 3, gems: 10, floaters: 6 },
+            { width: 2800, enemies: 4, gems: 12, floaters: 7 }, { width: 3000, enemies: 4, gems: 14, floaters: 8 },
+            { width: 3200, enemies: 5, gems: 15, floaters: 9 }, { width: 3400, enemies: 6, gems: 16, floaters: 10 },
+            { width: 3600, enemies: 7, gems: 18, floaters: 11 }, { width: 4000, enemies: 0, gems: 20, floaters: 12 },
+        ];
+
+        // --- Global Variables ---
+        let camera, player, platforms, gems, enemies, bullets, door, boss, key, playerHasKey, score, currentLevel, keys, gameActive, doorMessage;
+        let mapPlayer, levelNodes, completedLevels, stars, backgroundMountains, doorGlow;
+        
+        // Zeno Variables
+        let zenoFound, zenoLevel, zenoEntity, zenoSummon;
+
+        // Dungeon specific globals
+        let dungeonGrid, dungeonCellSize, dungeonCols, dungeonRows;
+        let dungeonCages, dungeonKeysList, dungeonPlayer, dungeonExit, dungeonKeysCount;
+        let isFullRestartMode = false;
+        let doorAnimation = { active: false, timer: 0, duration: 60, startX: 0, startY: 0, startW: 0, startH: 0 };
+
+        // --- Asset Drawing Functions ---
+        function drawPlayer(p) {
+            ctx.save();
+            ctx.translate(p.x + p.width / 2, p.y + p.height / 2);
+            ctx.scale(p.direction || 1, 1);
+            ctx.translate(-(p.x + p.width / 2), -(p.y + p.height / 2));
+
+            const cx = p.x + p.width / 2;
+            const headY = p.y + 20; 
+            const headR = 9;
+
+            // Super Saiyan Aura
+            if (p.isSuperSaiyan) {
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+                ctx.beginPath();
+                ctx.ellipse(cx, p.y + p.height / 2, 25 + Math.random() * 5, 35 + Math.random() * 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.beginPath();
+                ctx.ellipse(cx, p.y + p.height / 2, 15 + Math.random() * 3, 25 + Math.random() * 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            let walkOffset = 0;
+            let armOffset = 0;
+            if (p.onGround === false) {
+                walkOffset = 8;
+            } else if (Math.abs(p.dx) > 0 || p.isMoving) {
+                walkOffset = Math.sin((p.x + p.y) * 0.2) * 6;
+                armOffset = Math.sin((p.x + p.y) * 0.2) * 3;
+            }
+
+            const skin = '#ffc1a1';
+            const gi = '#f97300';
+            const blue = '#002366';
+
+            // Back Arm
+            ctx.fillStyle = skin;
+            ctx.fillRect(cx - 5 + armOffset, headY + 10, 5, 14);
+            ctx.fillStyle = blue; 
+            ctx.fillRect(cx - 6 + armOffset, headY + 18, 7, 4);
+
+            // Back Leg
+            ctx.fillStyle = gi;
+            if (p.onGround === false) {
+                ctx.beginPath(); ctx.moveTo(cx - 4, headY + 22); ctx.lineTo(cx - 12, headY + 30); ctx.lineTo(cx - 4, headY + 38); ctx.lineTo(cx + 2, headY + 30); ctx.fill();
+                ctx.fillStyle = blue; ctx.fillRect(cx - 8, headY + 34, 10, 6);
+            } else {
+                ctx.fillRect(cx - 6 + walkOffset, headY + 22, 8, 14);
+                ctx.fillStyle = blue; ctx.fillRect(cx - 8 + walkOffset, headY + 34, 12, 6);
+            }
+
+            // Torso
+            ctx.fillStyle = gi;
+            ctx.beginPath();
+            ctx.arc(cx, headY + 16, 9, 0, Math.PI * 2);
+            ctx.fillRect(cx - 9, headY + 16, 18, 10);
+            ctx.fill();
+            
+            // Undershirt
+            ctx.fillStyle = blue;
+            ctx.beginPath();
+            ctx.moveTo(cx - 5, headY + 8);
+            ctx.lineTo(cx + 5, headY + 8);
+            ctx.lineTo(cx, headY + 18);
+            ctx.fill();
+
+            // Belt
+            ctx.fillStyle = blue;
+            ctx.fillRect(cx - 10, headY + 24, 20, 4);
+            ctx.fillRect(cx - 11, headY + 24, 3, 6); // Knot
+
+            // Front Leg
+            ctx.fillStyle = gi;
+            if (p.onGround === false) {
+                ctx.beginPath(); ctx.moveTo(cx + 4, headY + 22); ctx.lineTo(cx + 12, headY + 28); ctx.lineTo(cx + 4, headY + 38); ctx.lineTo(cx - 2, headY + 28); ctx.fill();
+                ctx.fillStyle = blue; ctx.fillRect(cx + 1, headY + 34, 10, 6);
+            } else {
+                ctx.fillRect(cx - 2 - walkOffset, headY + 22, 8, 14);
+                ctx.fillStyle = blue; ctx.fillRect(cx - 3 - walkOffset, headY + 34, 12, 6);
+            }
+
+            // Front Arm
+            ctx.fillStyle = skin;
+            ctx.fillRect(cx - 2 - armOffset, headY + 12, 14, 5);
+            ctx.fillStyle = blue; 
+            ctx.fillRect(cx + 7 - armOffset, headY + 11, 4, 7);
+
+            // Head (Face)
+            ctx.fillStyle = skin;
+            ctx.beginPath();
+            ctx.arc(cx, headY, headR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.moveTo(cx + 2, headY - 3);
+            ctx.lineTo(cx + 7, headY - 1);
+            ctx.lineTo(cx + 2, headY + 1);
+            ctx.fill();
+
+            // Hair (Iconic Spikes)
+            ctx.fillStyle = p.isSuperSaiyan ? '#FFD700' : 'black';
+            ctx.beginPath();
+            ctx.moveTo(cx - 7, headY + 5);
+            ctx.lineTo(cx - 16, headY + 2);
+            ctx.lineTo(cx - 10, headY - 3);
+            ctx.lineTo(cx - 18, headY - 6);
+            ctx.lineTo(cx - 9, headY - 8);
+            ctx.lineTo(cx - 14, headY - 16);
+            ctx.lineTo(cx - 4, headY - 13);
+            ctx.lineTo(cx, headY - 21);
+            ctx.lineTo(cx + 5, headY - 12);
+            ctx.lineTo(cx + 12, headY - 15);
+            ctx.lineTo(cx + 9, headY - 7);
+            ctx.lineTo(cx + 15, headY - 3);
+            ctx.lineTo(cx + 10, headY + 2);
+            ctx.lineTo(cx + 14, headY + 5);
+            ctx.lineTo(cx + 7, headY + 4);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // New Zeno Character Drawing
+        function drawZenoChar(z) {
+            const cx = z.x + z.width / 2;
+            const cy = z.y + z.height / 2;
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // Aura if summoning
+            if (zenoSummon.active && zenoSummon.timer < zenoSummon.duration / 2) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.2})`;
+                ctx.beginPath();
+                ctx.arc(0, 0, 30 + Math.random() * 10, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Body (Pink/Purple jacket)
+            ctx.fillStyle = '#C71585'; 
+            ctx.fillRect(-10, -5, 20, 18);
+            
+            // Jacket Trim
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-10, -5, 20, 3);
+            ctx.fillRect(-10, 11, 20, 3);
+            ctx.fillRect(-2, -5, 4, 18); // Middle line
+
+            // Head (left purple, right blue)
+            ctx.fillStyle = '#DDA0DD'; // Plum
+            ctx.beginPath();
+            ctx.ellipse(-6, -16, 8, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#87CEFA'; // LightSkyBlue
+            ctx.beginPath();
+            ctx.ellipse(6, -16, 8, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Face details
+            ctx.fillStyle = 'black';
+            ctx.beginPath(); ctx.arc(-6, -16, 2, 0, Math.PI*2); ctx.fill(); 
+            ctx.beginPath(); ctx.arc(6, -16, 2, 0, Math.PI*2); ctx.fill();  
+            ctx.fillRect(-3, -11, 6, 2); // Small mouth
+
+            // Hands
+            ctx.fillStyle = '#87CEFA';
+            if (zenoSummon.active && zenoSummon.timer < zenoSummon.duration / 2) {
+                // Raised arms
+                ctx.beginPath(); ctx.arc(-15, -15, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(15, -15, 4, 0, Math.PI*2); ctx.fill();
+            } else {
+                // Arms at side
+                ctx.beginPath(); ctx.arc(-12, 5, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(12, 5, 4, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function drawPlatform(p) {
+            ctx.fillStyle = '#6B4F3A';
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.fillStyle = '#53bf9d';
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            for (let i = 0; i <= p.width; i++) {
+                const yOffset = Math.sin((p.x + i) * 0.1) * 3;
+                ctx.lineTo(p.x + i, p.y + yOffset);
+            }
+            ctx.lineTo(p.x + p.width, p.y + 10);
+            ctx.lineTo(p.x, p.y + 10);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawGem(g) { 
+            ctx.save(); 
+            ctx.translate(g.x + g.width / 2, g.y + g.height / 2); 
+            
+            if (g.type === 'yellow') {
+                // Render as Dragon Ball
+                ctx.fillStyle = '#f9a826'; 
+                ctx.beginPath();
+                ctx.arc(0, 0, g.width / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#d32f2f';
+                ctx.font = "12px 'Press Start 2P'";
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("*", 0, 4);
+            } else {
+                // Blue crystal
+                ctx.rotate(g.angle); 
+                ctx.fillStyle = '#4a90e2';
+                ctx.beginPath(); 
+                ctx.moveTo(0, -g.height / 2); 
+                ctx.lineTo(g.width / 2, 0); 
+                ctx.lineTo(0, g.height / 2); 
+                ctx.lineTo(-g.width / 2, 0); 
+                ctx.closePath(); 
+                ctx.fill(); 
+            }
+            
+            ctx.restore(); 
+            g.angle += 0.05; 
+        }
+        
+        function drawEnemy(e) {
+            const cx = e.x + e.width / 2;
+            const y = e.y;
+            
+            // Determine Gamma 1 (Red) or Gamma 2 (Blue) based on starting position
+            const isGamma1 = Math.floor(e.startX) % 2 === 0;
+            const themeColor = isGamma1 ? '#ff0033' : '#3366ff';
+            const suitColor = '#e0e0e0'; 
+            const darkGrey = '#333333';
+            const gold = '#ffd700';
+
+            ctx.save();
+            ctx.translate(cx, y);
+            ctx.scale(e.direction || 1, 1);
+            ctx.translate(-cx, -y);
+
+            // Cape (flapping behind)
+            ctx.fillStyle = themeColor;
+            ctx.beginPath();
+            ctx.moveTo(cx - 8, y + 10);
+            ctx.lineTo(cx - 22, y + 36);
+            ctx.lineTo(cx - 2, y + 36);
+            ctx.fill();
+
+            // Legs
+            ctx.fillStyle = suitColor;
+            ctx.fillRect(cx - 8, y + 26, 6, 12);
+            ctx.fillRect(cx + 2, y + 26, 6, 12);
+            
+            // Boots
+            ctx.fillStyle = gold;
+            ctx.fillRect(cx - 10, y + 34, 10, 6);
+            ctx.fillRect(cx, y + 34, 10, 6);
+
+            // Torso
+            ctx.fillStyle = suitColor;
+            ctx.beginPath();
+            ctx.ellipse(cx, y + 18, 11, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Belt
+            ctx.fillStyle = darkGrey;
+            ctx.fillRect(cx - 12, y + 25, 24, 4);
+            ctx.fillStyle = gold;
+            ctx.fillRect(cx - 3, y + 23, 6, 8); // Belt buckle
+
+            // Chest Design
+            ctx.fillStyle = gold;
+            ctx.beginPath();
+            ctx.moveTo(cx - 8, y + 12);
+            ctx.lineTo(cx + 8, y + 12);
+            ctx.lineTo(cx, y + 22);
+            ctx.fill();
+
+            // Arms
+            ctx.fillStyle = suitColor;
+            // Back Arm
+            ctx.beginPath(); ctx.ellipse(cx - 12, y + 18, 4, 8, -Math.PI/4, 0, Math.PI * 2); ctx.fill();
+            // Front Arm (extended to shoot)
+            ctx.beginPath(); ctx.ellipse(cx + 12, y + 18, 4, 8, Math.PI/4, 0, Math.PI * 2); ctx.fill();
+            
+            // Gloves
+            ctx.fillStyle = darkGrey;
+            ctx.beginPath(); ctx.arc(cx - 15, y + 24, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + 15, y + 24, 4, 0, Math.PI * 2); ctx.fill();
+            
+            // Ray Gun in front hand
+            ctx.fillStyle = themeColor;
+            ctx.fillRect(cx + 15, y + 21, 10, 4);
+            ctx.fillStyle = '#111';
+            ctx.fillRect(cx + 25, y + 22, 3, 2);
+
+            // Head
+            ctx.fillStyle = suitColor;
+            ctx.beginPath();
+            ctx.arc(cx, y + 6, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Fin / Crest
+            ctx.fillStyle = themeColor;
+            ctx.beginPath();
+            ctx.moveTo(cx, y - 4);
+            ctx.lineTo(cx - 8, y - 14);
+            ctx.lineTo(cx + 8, y - 14);
+            ctx.fill();
+            
+            // Crest Top detail
+            ctx.fillStyle = gold;
+            ctx.beginPath();
+            ctx.arc(cx, y - 14, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes / Visor
+            ctx.fillStyle = 'black';
+            ctx.fillRect(cx - 7, y + 3, 14, 4);
+
+            ctx.restore();
+        }
+
+        function drawDoor(d) {
+            ctx.fillStyle = '#6c757d'; ctx.fillRect(d.x, d.y, d.width, d.height);
+            ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.moveTo(d.x + 5, d.y + d.height); ctx.lineTo(d.x + 5, d.y + 20); ctx.arc(d.x + d.width / 2, d.y + 20, d.width / 2 - 5, Math.PI, 0); ctx.lineTo(d.x + d.width - 5, d.y + d.height); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.fillRect(d.x + 10, d.y + 20, d.width - 20, d.height - 20);
+        }
+
+        function drawFinalDoor(d) {
+            ctx.fillStyle = '#DAA520'; ctx.fillRect(d.x, d.y, d.width, d.height);
+            ctx.fillStyle = `rgba(255, 223, 0, ${doorGlow})`; ctx.beginPath(); ctx.moveTo(d.x + 5, d.y + d.height); ctx.lineTo(d.x + 5, d.y + 20); ctx.arc(d.x + d.width / 2, d.y + 20, d.width / 2 - 5, Math.PI, 0); ctx.lineTo(d.x + d.width - 5, d.y + d.height); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.fillRect(d.x + 10, d.y + 20, d.width - 20, d.height - 20);
+            ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(d.x + d.width / 2, d.y + d.height - 30, 8, 0, Math.PI * 2); ctx.fill();
+        }
+
+        function drawBullet(b) { 
+            // Draw as a glowing Ki blast
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.6)'; 
+            ctx.beginPath();
+            ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#ffffff'; 
+            ctx.beginPath();
+            ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBoss(b) {
+            // Health Bar
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(b.x, b.y - 25, b.width, 15);
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(b.x, b.y - 25, b.width * (b.hp / 5), 15);
+
+            // Frieza (Final Form approximation)
+            const cx = b.x + b.width / 2;
+            const y = b.y;
+            const w = b.width;
+            const h = b.height;
+            const white = '#f4f4f4';
+            const purple = '#720b98';
+            
+            ctx.save();
+            
+            // Tail
+            ctx.strokeStyle = white;
+            ctx.lineWidth = 12;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cx, y + h * 0.65);
+            // Swirl the tail up to the right
+            ctx.quadraticCurveTo(b.x + w + 40, y + h * 0.8, b.x + w + 10, y + 10);
+            ctx.stroke();
+            
+            // Legs
+            ctx.fillStyle = white;
+            ctx.fillRect(cx - 18, y + h * 0.6, 12, h * 0.4);
+            ctx.fillRect(cx + 6, y + h * 0.6, 12, h * 0.4);
+            // Feet
+            ctx.fillRect(cx - 24, y + h - 5, 20, 8);
+            ctx.fillRect(cx + 2, y + h - 5, 20, 8);
+
+            // Arms (behind torso)
+            ctx.strokeStyle = white;
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            // Left arm (crossed or bent)
+            ctx.moveTo(cx - 20, y + h * 0.3);
+            ctx.lineTo(cx - 35, y + h * 0.4);
+            ctx.lineTo(cx - 20, y + h * 0.55);
+            // Right arm (raised to shoot ki)
+            ctx.moveTo(cx + 20, y + h * 0.3);
+            ctx.lineTo(cx + 40, y + h * 0.1);
+            ctx.stroke();
+
+            // Right hand ki blast glow
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+            ctx.beginPath();
+            ctx.arc(cx + 40, y + h * 0.1, 10 + Math.random() * 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Torso
+            ctx.fillStyle = white;
+            ctx.beginPath();
+            ctx.ellipse(cx, y + h * 0.4, 22, 28, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Purple Chest/Abdomen Plates
+            ctx.fillStyle = purple;
+            ctx.beginPath();
+            ctx.ellipse(cx, y + h * 0.35, 14, 16, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Shoulders (Purple pads)
+            ctx.beginPath();
+            ctx.arc(cx - 22, y + h * 0.28, 8, 0, Math.PI * 2);
+            ctx.arc(cx + 22, y + h * 0.28, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.fillStyle = white;
+            ctx.beginPath();
+            ctx.ellipse(cx, y + 10, 18, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Purple Head Dome
+            ctx.fillStyle = purple;
+            ctx.beginPath();
+            ctx.ellipse(cx, y + 4, 14, 10, 0, Math.PI, 0);
+            ctx.fill();
+
+            // Face (Eyes & Lines)
+            // Eyes
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.moveTo(cx - 14, y + 12);
+            ctx.lineTo(cx - 4, y + 16);
+            ctx.lineTo(cx - 4, y + 14);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(cx + 14, y + 12);
+            ctx.lineTo(cx + 4, y + 16);
+            ctx.lineTo(cx + 4, y + 14);
+            ctx.fill();
+            
+            // Eye lines (Tear marks)
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - 10, y + 17);
+            ctx.lineTo(cx - 6, y + 21);
+            ctx.moveTo(cx + 10, y + 17);
+            ctx.lineTo(cx + 6, y + 21);
+            ctx.stroke();
+
+            // Mouth (smirk)
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx - 4, y + 24);
+            ctx.quadraticCurveTo(cx, y + 26, cx + 6, y + 23);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawKey(k) { ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(k.x, k.y, k.width / 2, 0, Math.PI * 2); ctx.rect(k.x + k.width / 2 - 2, k.y - 2, k.width, 4); ctx.rect(k.x + k.width * 1.5 - 2, k.y + 2, 4, 6); ctx.fill(); }
+        
+        function drawDungeonKey(k) {
+            ctx.save();
+            ctx.translate(k.x + k.width/2, k.y + k.height/2);
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(-5, 0, 6, 0, Math.PI * 2);
+            ctx.rect(0, -2, 12, 4);
+            ctx.rect(8, 2, 4, 6);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawDungeonCage(c) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(c.x, c.y, c.width, c.height); 
+            ctx.fillStyle = '#6c757d';
+            for(let i = 0; i < c.width; i += 8) {
+                ctx.fillRect(c.x + i + 2, c.y, 4, c.height);
+            }
+            ctx.fillRect(c.x, c.y, c.width, 6);
+            ctx.fillRect(c.x, c.y + c.height - 6, c.width, 6);
+        }
+
+        function drawPlanetBackground() {
+            backgroundMountains.forEach(mountain => {
+                ctx.fillStyle = '#0b1a2e';
+                ctx.beginPath();
+                ctx.moveTo(mountain.x, mountain.y);
+                ctx.lineTo(mountain.x + mountain.width / 2, mountain.y - mountain.height);
+                ctx.lineTo(mountain.x + mountain.width, mountain.y);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+
+        // --- Game Initialization ---
+        function initGame() {
+            score = 0;
+            scoreEl.textContent = `Score: ${score}`;
+            completedLevels = [];
+            keys = { left: false, right: false, up: false, down: false, space: false };
+            doorGlow = 0.5;
+            isFullRestartMode = false;
+            
+            // Setup Zeno defaults
+            zenoFound = false;
+            zenoLevel = Math.floor(Math.random() * 9) + 1; // Spawns randomly between levels 1 and 9
+            zenoEntity = null;
+            zenoSummon = { active: false, timer: 0, duration: 90, x: 0, y: 0, maxRadius: 1200 };
+
+            levelNodes = [
+                { x: 150, y: 450, c1: '#3a86ff', c2: '#8338ec' }, { x: 300, y: 500, c1: '#ffbe0b', c2: '#fb5607' },
+                { x: 500, y: 480, c1: '#ff006e', c2: '#8338ec' }, { x: 680, y: 400, c1: '#3a86ff', c2: '#ffbe0b' },
+                { x: 600, y: 250, c1: '#53bf9d', c2: '#3a86ff' }, { x: 450, y: 150, c1: '#ff006e', c2: '#ffbe0b' },
+                { x: 250, y: 100, c1: '#8338ec', c2: '#53bf9d' }, { x: 100, y: 200, c1: '#fb5607', c2: '#ff006e' },
+                { x: 200, y: 300, c1: '#3a86ff', c2: '#ffbe0b' }, { x: 400, y: 320, c1: '#e94560', c2: '#ffd700' }
+            ];
+            mapPlayer = { x: 150, y: 450, width: 30, height: 30, vx: 0, vy: 0, angle: 0, thrust: 0.1, friction: 0.98, selectedNode: 0 };
+            
+            stars = [];
+            for (let i = 0; i < 200; i++) {
+                stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, radius: Math.random() * 1.5, alpha: Math.random() * 0.5 + 0.5 });
+            }
+
+            switchToMap();
+            if (!gameLoopId) gameLoop();
+        }
+
+        function startLevel(levelNum) {
+            currentLevel = levelNum;
+            gameActive = true;
+            playerHasKey = false;
+            levelIndicatorEl.textContent = `Level: ${currentLevel}`;
+            ammoIndicatorEl.textContent = `Ki: 10`;
+            
+            instructionTextEl.textContent = zenoFound ? 'Space: Fire | Down: SSJ | 1: Zeno' : 'Space to Fire | Down: Super Saiyan';
+            zenoSummon.active = false;
+
+            player = { x: 100, y: 400, width: config.playerWidth, height: config.playerHeight, dx: 0, dy: 0, onGround: false, direction: 1, ammo: 10, isSuperSaiyan: false, hasUsedSuperSaiyan: false, superSaiyanTimer: 0 };
+            bullets = [];
+            camera = { x: 0, y: 0 };
+            doorMessage = { text: '', timer: 0 };
+            generateLevel(currentLevel);
+            gameState = 'level';
+        }
+
+        function startDungeon() {
+            gameActive = true;
+            gameState = 'dungeon';
+            dungeonCellSize = 40;
+            dungeonCols = 41;
+            dungeonRows = 41;
+            dungeonKeysCount = 0;
+            isFullRestartMode = false;
+
+            levelIndicatorEl.textContent = 'Level: Dungeon';
+            ammoIndicatorEl.textContent = `Keys: 0`;
+            instructionTextEl.textContent = 'Find the Exit!';
+            messageBox.style.display = 'none';
+
+            dungeonGrid = Array(dungeonCols).fill().map(() => Array(dungeonRows).fill(1));
+
+            function carve(x, y) {
+                dungeonGrid[x][y] = 0;
+                const dirs = [[0,-2], [0,2], [-2,0], [2,0]];
+                for (let i = dirs.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+                }
+                for (let [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < dungeonCols - 1 && ny > 0 && ny < dungeonRows - 1 && dungeonGrid[nx][ny] === 1) {
+                        dungeonGrid[x + dx/2][y + dy/2] = 0;
+                        carve(nx, ny);
+                    }
+                }
+            }
+            carve(1, 1);
+
+            let path = [];
+            let queue = [ {pos: [1,1], path: [[1,1]]} ];
+            let visited = new Set(["1,1"]);
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                if(curr.pos[0] === dungeonCols-2 && curr.pos[1] === dungeonRows-2) {
+                    path = curr.path;
+                    break;
+                }
+                const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                for (let [dx, dy] of dirs) {
+                    const nx = curr.pos[0] + dx, ny = curr.pos[1] + dy;
+                    if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !visited.has(`${nx},${ny}`)) {
+                        visited.add(`${nx},${ny}`);
+                        queue.push({pos: [nx, ny], path: [...curr.path, [nx, ny]]});
+                    }
+                }
+            }
+            
+            if (path.length === 0) path = [[1,1], [dungeonCols-2, dungeonRows-2]]; 
+
+            dungeonCages = [];
+            dungeonKeysList = [];
+            const cageIndices = [];
+            for(let i=1; i<=5; i++) {
+                cageIndices.push(Math.floor((path.length - 1) * i / 6));
+            }
+
+            for(let i=0; i<5; i++) {
+                const cageCell = path[cageIndices[i]];
+                dungeonCages.push({ 
+                    gridX: cageCell[0], gridY: cageCell[1], active: true,
+                    x: cageCell[0]*dungeonCellSize, y: cageCell[1]*dungeonCellSize,
+                    width: dungeonCellSize, height: dungeonCellSize 
+                });
+
+                const startIdx = i === 0 ? 0 : cageIndices[i-1] + 1;
+                const endIdx = cageIndices[i] - 1;
+
+                let validSpots = [];
+                let q2 = [];
+                let v2 = new Set();
+
+                for(let j=startIdx; j<=endIdx; j++) {
+                    q2.push(path[j]);
+                    v2.add(`${path[j][0]},${path[j][1]}`);
+                }
+
+                while(q2.length > 0) {
+                    let curr = q2.shift();
+                    let isMainPath = path.some(p => p[0]===curr[0] && p[1]===curr[1]);
+                    if(!isMainPath || validSpots.length === 0) validSpots.push(curr);
+
+                    const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+                    for (let [dx, dy] of dirs) {
+                        const nx = curr[0] + dx, ny = curr[1] + dy;
+                        if (dungeonGrid[nx] && dungeonGrid[nx][ny] === 0 && !v2.has(`${nx},${ny}`)) {
+                            let isCage = dungeonCages.some(c => c.gridX === nx && c.gridY === ny);
+                            if(!isCage) {
+                                v2.add(`${nx},${ny}`);
+                                q2.push([nx, ny]);
+                            }
+                        }
+                    }
+                }
+
+                let offPathSpots = validSpots.filter(spot => !path.some(p => p[0]===spot[0] && p[1]===spot[1]));
+                let chosenSpots = offPathSpots.length > 0 ? offPathSpots : validSpots;
+                if (chosenSpots.length > 1) chosenSpots = chosenSpots.filter(spot => !(spot[0]===1 && spot[1]===1));
+                
+                let chosen = chosenSpots[Math.floor(Math.random() * chosenSpots.length)];
+                dungeonKeysList.push({ 
+                    gridX: chosen[0], gridY: chosen[1], collected: false,
+                    x: chosen[0]*dungeonCellSize + 10, y: chosen[1]*dungeonCellSize + 10,
+                    width: 20, height: 20 
+                });
+            }
+
+            dungeonPlayer = {
+                x: 1 * dungeonCellSize + 5, y: 1 * dungeonCellSize + 5,
+                width: 30, height: 30, speed: 4, direction: 1
+            };
+
+            dungeonExit = {
+                x: (dungeonCols - 2) * dungeonCellSize, y: (dungeonRows - 2) * dungeonCellSize,
+                width: dungeonCellSize, height: dungeonCellSize, glow: 0
+            };
+        }
+        
+        function switchToMap() {
+            gameState = 'map';
+            levelIndicatorEl.textContent = 'Level: Map';
+            ammoIndicatorEl.textContent = 'Ki: -';
+            instructionTextEl.textContent = 'Space to Select';
+            messageBox.style.display = 'none';
+            if (currentLevel === config.maxLevels && mapPlayer) {
+                mapPlayer.x = levelNodes[9].x;
+                mapPlayer.y = levelNodes[9].y;
+            }
+        }
+
+        class SeededRandom { constructor(seed) { this.seed = seed; } next() { this.seed = (this.seed * 1664525 + 1013904223) % 2**32; return this.seed / 2**32; } }
+
+        function generateLevel(levelNum) {
+            const random = new SeededRandom(levelNum);
+            const levelConf = levelConfigs[levelNum - 1];
+            config.levelWidth = levelConf.width;
+            platforms = []; gems = []; enemies = []; boss = null; key = null; backgroundMountains = []; zenoEntity = null;
+            
+            for (let i = 0; i < config.levelWidth; i += 300) {
+                backgroundMountains.push({ x: i + random.next() * 100, y: 550, width: 200 + random.next() * 200, height: 100 + random.next() * 250 });
+            }
+
+            const maxJumpHeight = 150, maxJumpWidth = 220;
+            const startPlatform = { x: 0, y: 550, width: 300, height: 50 };
+            platforms.push(startPlatform);
+            let platformFrontier = [startPlatform], currentX = startPlatform.width;
+            while (currentX < config.levelWidth) {
+                const gap = 50 + random.next() * 23; currentX += gap;
+                const platformWidth = 250 + random.next() * 400;
+                const newGroundPlatform = { x: currentX, y: 550, width: platformWidth, height: 50 };
+                platforms.push(newGroundPlatform); platformFrontier.push(newGroundPlatform); currentX += platformWidth;
+            }
+            const possibleY = [450, 350, 250], possibleWidths = [100, 150, 200, 250];
+            let placedFloaters = 0, generationTries = 0;
+            while (placedFloaters < levelConf.floaters && generationTries < 500) {
+                generationTries++;
+                const basePlatform = platformFrontier[Math.floor(random.next() * platformFrontier.length)];
+                const pWidth = possibleWidths[Math.floor(random.next() * possibleWidths.length)];
+                const pY = basePlatform.y - (50 + random.next() * (maxJumpHeight - 50));
+                const targetY = possibleY.reduce((prev, curr) => (Math.abs(curr - pY) < Math.abs(prev - pY) ? curr : prev));
+                const direction = random.next() < 0.5 ? -1 : 1;
+                const xOffset = (pWidth / 2) + random.next() * (maxJumpWidth - pWidth);
+                const pX = (basePlatform.x + basePlatform.width / 2) + (direction * xOffset);
+                const candidatePlatform = { x: Math.floor(pX / 50) * 50, y: targetY, width: pWidth, height: 20 };
+                let overlaps = false;
+                for (const p of platforms) { if (checkCollision({ x: candidatePlatform.x - 20, y: candidatePlatform.y - 20, width: candidatePlatform.width + 40, height: candidatePlatform.height + 40 }, p)) { overlaps = true; break; } }
+                if (!overlaps && candidatePlatform.x > 0 && candidatePlatform.x + candidatePlatform.width < config.levelWidth) { platforms.push(candidatePlatform); platformFrontier.push(candidatePlatform); placedFloaters++; }
+            }
+            for (let i = 0; i < levelConf.gems; i++) {
+                if (platforms.length === 0) break;
+                const placementType = random.next(), type = random.next() < 0.2 ? 'blue' : 'yellow';
+                let placed = false, tries = 0;
+                while (!placed && tries < 50) {
+                    tries++;
+                    if (placementType < 0.4) { const p = platforms[Math.floor(random.next() * platforms.length)]; gems.push({ x: p.x + p.width / 2 - 10, y: p.y - 40, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; }
+                    else if (placementType < 0.7) { const p = platforms[Math.floor(random.next() * platforms.length)]; const side = random.next() < 0.5 ? 'left' : 'right'; gems.push({ x: (side === 'left') ? p.x - 40 : p.x + p.width + 20, y: p.y - 20, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; }
+                    else { const p1 = platforms[Math.floor(random.next() * platforms.length)]; const p2 = platforms[Math.floor(random.next() * platforms.length)]; if (p1 !== p2 && Math.abs(p1.y - p2.y) < 100) { const [leftP, rightP] = p1.x < p2.x ? [p1, p2] : [p2, p1]; const gap = rightP.x - (leftP.x + leftP.width); if (gap > 50 && gap < 220) { gems.push({ x: (leftP.x + leftP.width) + gap / 2 - 10, y: Math.min(p1.y, p2.y) - 80, width: 20, height: 20, angle: 0, collected: false, type: type }); placed = true; } } }
+                }
+                if (!placed) i--;
+            }
+            if (currentLevel === config.maxLevels) {
+                const startX = config.levelWidth - 600;
+                const startY = 400;
+                boss = { x: startX, y: startY, startX: startX, startY: startY, width: 70, height: 85, hp: 5, dx: 0, dy: 0, onGround: false, jumpTimer: 0, jumpCooldown: 120, isDefeated: false };
+                key = { x: boss.x + boss.width + 70, y: 510, width: 20, height: 20, collected: false };
+            }
+            else { const groundPlatforms = platforms.filter(p => p.y === 550 && p.width > 250); for (let i = 0; i < levelConf.enemies; i++) { if (groundPlatforms.length === 0) break; const p = groundPlatforms[Math.floor(random.next() * groundPlatforms.length)]; const patrolRange = 100 + random.next() * 100; const startX = p.x + random.next() * (p.width - patrolRange); enemies.push({ x: startX, y: 510, width: 40, height: 40, direction: 1, startX: startX, range: patrolRange }); } }
+            door = { x: config.levelWidth - 150, y: 450, width: 60, height: 100 };
+            platforms.push({x: config.levelWidth - 200, y: 550, width: 200, height: 50});
+
+            // Randomly spawn Zeno on the assigned level
+            if (currentLevel === zenoLevel && !zenoFound) {
+                // Try to put him on an elevated platform further inside the level
+                const validPlatforms = platforms.filter(p => p.y < 500 && p.x > 300); 
+                const p = validPlatforms.length > 0 ? validPlatforms[Math.floor(random.next() * validPlatforms.length)] : platforms[1];
+                if (p) {
+                    zenoEntity = { x: p.x + p.width / 2 - 15, y: p.y - 40, width: 30, height: 40 };
+                }
+            }
+        }
+
+        // --- Input Handling ---
+        function handleKeyDown(e) {
+            const keyName = e.key;
+            if (gameState === 'map') {
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') keys.down = true;
+            } else if (gameState === 'level') {
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') {
+                    keys.down = true;
+                    if (player && !player.hasUsedSuperSaiyan) {
+                        player.isSuperSaiyan = true;
+                        player.hasUsedSuperSaiyan = true;
+                        player.superSaiyanTimer = 600; // 10 seconds at ~60fps
+                        player.ammo += 10;
+                        ammoIndicatorEl.textContent = `Ki: ${player.ammo}`;
+                    }
+                }
+                
+                // Zeno Summon Input
+                if (keyName === '1' && zenoFound && !zenoSummon.active) {
+                    zenoSummon.active = true;
+                    zenoSummon.timer = 0;
+                    zenoSummon.x = player.x + player.width / 2;
+                    zenoSummon.y = player.y - 60; 
+                }
+
+            } else if (gameState === 'dungeon') {
+                if (keyName === 'ArrowLeft') keys.left = true;
+                if (keyName === 'ArrowRight') keys.right = true;
+                if (keyName === 'ArrowUp') keys.up = true;
+                if (keyName === 'ArrowDown') keys.down = true;
+            }
+            
+            if (keyName === ' ' || keyName === 'Spacebar') {
+                if (!keys.space) {
+                    if (gameState === 'map' && mapPlayer.selectedNode !== null) {
+                        startLevel(mapPlayer.selectedNode + 1);
+                    } else if (gameState === 'level') {
+                        shoot();
+                    }
+                }
+                keys.space = true;
+            }
+        }
+        function handleKeyUp(e) {
+            const keyName = e.key;
+            if (keyName === 'ArrowLeft') keys.left = false;
+            if (keyName === 'ArrowRight') keys.right = false;
+            if (keyName === 'ArrowUp') keys.up = false;
+            if (keyName === 'ArrowDown') keys.down = false;
+            if (keyName === ' ' || keyName === 'Spacebar') keys.space = false;
+        }
+
+        function shoot() {
+            if (player.ammo > 0) {
+                player.ammo--;
+                ammoIndicatorEl.textContent = `Ki: ${player.ammo}`;
+                bullets.push({ x: player.x + (player.direction === 1 ? player.width : -10), y: player.y + player.height / 2 - 5, width: 10, height: 10, direction: player.direction });
+            }
+        }
+
+        // --- Update Functions ---
+        function updateMap() {
+            if (keys.up) {
+                mapPlayer.vx += Math.cos(mapPlayer.angle) * mapPlayer.thrust;
+                mapPlayer.vy += Math.sin(mapPlayer.angle) * mapPlayer.thrust;
+            }
+            if (keys.left) { mapPlayer.angle -= 0.05; }
+            if (keys.right) { mapPlayer.angle += 0.05; }
+
+            mapPlayer.vx *= mapPlayer.friction;
+            mapPlayer.vy *= mapPlayer.friction;
+            mapPlayer.x += mapPlayer.vx;
+            mapPlayer.y += mapPlayer.vy;
+
+            if (mapPlayer.x > canvas.width + 15) mapPlayer.x = -15;
+            if (mapPlayer.x < -15) mapPlayer.x = canvas.width + 15;
+            if (mapPlayer.y > canvas.height + 15) mapPlayer.y = -15;
+            if (mapPlayer.y < -15) mapPlayer.y = canvas.height + 15;
+
+            mapPlayer.selectedNode = null;
+            levelNodes.forEach((node, i) => {
+                const dx = mapPlayer.x - node.x;
+                const dy = mapPlayer.y - node.y;
+                if (Math.sqrt(dx * dx + dy * dy) < 30) {
+                    mapPlayer.selectedNode = i;
+                }
+            });
+
+            stars.forEach(star => { star.alpha += Math.random() > 0.5 ? 0.05 : -0.05; if (star.alpha < 0.2) star.alpha = 0.2; if (star.alpha > 1) star.alpha = 1; });
+        }
+
+        function updateLevel() {
+            if (doorAnimation.active) {
+                doorAnimation.timer++;
+                const progress = doorAnimation.timer / doorAnimation.duration;
+                player.x = doorAnimation.startX + (door.x + door.width / 2 - doorAnimation.startX) * progress;
+                player.y = doorAnimation.startY + (door.y + door.height / 2 - doorAnimation.startY) * progress;
+                player.width = doorAnimation.startW * (1 - progress);
+                player.height = doorAnimation.startH * (1 - progress);
+
+                if (doorAnimation.timer >= doorAnimation.duration) {
+                    doorAnimation.active = false;
+                    if (currentLevel === config.maxLevels) {
+                        showMessage("You beat the game!", true, true);
+                    } else {
+                        showMessage(`Level ${currentLevel} Complete!`, true);
+                    }
+                }
+                return;
+            }
+
+            if (!gameActive) return;
+            
+            // Check for picking up Zeno
+            if (zenoEntity && checkCollision(player, zenoEntity)) {
+                zenoFound = true;
+                zenoEntity = null;
+                score += 100;
+                scoreEl.textContent = `Score: ${score}`;
+                doorMessage = { text: "Zeno Befriended! Press 1 to summon!", timer: 200 };
+                instructionTextEl.textContent = 'Space: Fire | Down: SSJ | 1: Zeno';
+            }
+
+            // Handle Zeno Summon Attack Logic
+            if (zenoSummon.active) {
+                zenoSummon.timer++;
+                
+                // Track player while charging
+                if (zenoSummon.timer < zenoSummon.duration / 2) {
+                    zenoSummon.x = player.x + player.width / 2;
+                    zenoSummon.y = player.y - 60;
+                }
+
+                const halfDuration = Math.floor(zenoSummon.duration / 2);
+                
+                // Execution frame (wipe enemies)
+                if (zenoSummon.timer === halfDuration) {
+                    // Erase on-screen enemies
+                    for (let i = enemies.length - 1; i >= 0; i--) {
+                        const e = enemies[i];
+                        if (e.x > camera.x && e.x < camera.x + canvas.width) {
+                            enemies.splice(i, 1);
+                            score += 10;
+                        }
+                    }
+                    scoreEl.textContent = `Score: ${score}`;
+                    
+                    // Damage Boss if on screen
+                    if (boss && !boss.isDefeated && boss.x > camera.x && boss.x < camera.x + canvas.width) {
+                        boss.hp -= 3;
+                        if (boss.hp <= 0) {
+                            boss.isDefeated = true;
+                            score += 50;
+                            scoreEl.textContent = `Score: ${score}`;
+                        }
+                    }
+                }
+
+                if (zenoSummon.timer >= zenoSummon.duration) {
+                    zenoSummon.active = false;
+                }
+            }
+
+            if (player.isSuperSaiyan) {
+                player.superSaiyanTimer--;
+                if (player.superSaiyanTimer <= 0) {
+                    player.isSuperSaiyan = false;
+                }
+            }
+
+            doorGlow = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+            player.dx = 0;
+            const currentSpeed = player.isSuperSaiyan ? config.playerSpeed * 1.8 : config.playerSpeed;
+            if (keys.left) { player.dx = -currentSpeed; player.direction = -1; }
+            if (keys.right) { player.dx = currentSpeed; player.direction = 1; }
+            if (keys.up && player.onGround) { player.dy = -config.jumpForce; player.onGround = false; }
+            player.dy += config.gravity;
+            player.onGround = false;
+            let nextX = player.x + player.dx, nextY = player.y + player.dy;
+            platforms.forEach(p => {
+                if (nextX < p.x + p.width && nextX + player.width > p.x && player.y < p.y + p.height && player.y + player.height > p.y) { nextX = player.x; }
+                if (player.x < p.x + p.width && player.x + player.width > p.x && nextY < p.y + p.height && nextY + player.height > p.y) {
+                    if (player.dy > 0 && player.y + player.height <= p.y) { nextY = p.y - player.height; player.dy = 0; player.onGround = true; } 
+                    else if (player.dy < 0 && player.y >= p.y + p.height) { nextY = p.y + p.height; player.dy = 0; }
+                }
+            });
+            player.x = nextX; player.y = nextY;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > config.levelWidth) player.x = config.levelWidth - player.width;
+            if (player.y > canvas.height) { showMessage("You fell!", false); }
+            gems.forEach(gem => { if (!gem.collected && checkCollision(player, gem)) { gem.collected = true; score += (gem.type === 'blue' ? 20 : 10); scoreEl.textContent = `Score: ${score}`; } });
+            if (key && !key.collected && checkCollision(player, key)) { key.collected = true; playerHasKey = true; }
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i]; b.x += config.bulletSpeed * b.direction; let removed = false;
+                for (let j = enemies.length - 1; j >= 0; j--) { if (checkCollision(b, enemies[j])) { enemies.splice(j, 1); bullets.splice(i, 1); removed = true; score += 5; scoreEl.textContent = `Score: ${score}`; break; } }
+                if (removed) continue;
+                if (boss && !boss.isDefeated && checkCollision(b, boss)) {
+                    boss.hp--; bullets.splice(i, 1); removed = true;
+                    if (boss.hp <= 0) {
+                        boss.isDefeated = true;
+                        score += 30;
+                        scoreEl.textContent = `Score: ${score}`;
+                    }
+                }
+                if (removed) continue;
+                if (b.x > camera.x + canvas.width || b.x < camera.x) { bullets.splice(i, 1); }
+            }
+            enemies.forEach(e => {
+                let canMove = true; const moveAmount = config.enemySpeed * e.direction; const nextEnemyX = e.x + moveAmount; const nextEnemyBox = { ...e, x: nextEnemyX };
+                if (checkCollision(player, nextEnemyBox)) {
+                    const nextPlayerBox = { ...player, x: player.x + moveAmount }; let playerBlocked = false;
+                    for (const p of platforms) { if (checkCollision(nextPlayerBox, p)) { playerBlocked = true; break; } }
+                    if (playerBlocked) { canMove = false; } else { player.x += moveAmount; }
+                }
+                if (canMove) { e.x = nextEnemyX; }
+                if (e.x < e.startX || e.x > e.startX + e.range) { e.direction *= -1; }
+            });
+            
+            if (boss && !boss.isDefeated) {
+                const chaseSpeed = 1.5;
+                if (player.x > boss.x + boss.width) boss.dx = chaseSpeed;
+                else if (player.x < boss.x) boss.dx = -chaseSpeed;
+                else boss.dx = 0;
+                
+                boss.x += boss.dx;
+                boss.dy += config.gravity;
+                boss.y += boss.dy;
+                boss.onGround = false;
+                platforms.forEach(p => {
+                    if (checkCollision(boss, p) && boss.y + boss.height <= p.y + 20) {
+                        boss.y = p.y - boss.height;
+                        boss.dy = 0;
+                        boss.onGround = true;
+                    }
+                });
+                
+                boss.jumpTimer++;
+                if (boss.onGround && boss.jumpTimer > boss.jumpCooldown) {
+                    boss.dy = -config.jumpForce * 1.1;
+                    boss.onGround = false;
+                    boss.jumpTimer = 0;
+                }
+                
+                if (boss.x + boss.width < camera.x - 50 || boss.x > camera.x + canvas.width + 50) {
+                    boss.x = boss.startX;
+                    boss.y = boss.startY;
+                    boss.dy = 0;
+                }
+
+                if (checkCollision(player, boss)) {
+                    startDungeon();
+                }
+            }
+
+            if (doorMessage.timer > 0) { doorMessage.timer--; }
+            camera.x = player.x - canvas.width / 2 + player.width / 2;
+            if (camera.x < 0) camera.x = 0; if (camera.x > config.levelWidth - canvas.width) camera.x = config.levelWidth - canvas.width;
+            
+            if (checkCollision(player, door)) {
+                let canEnter = false;
+                if (currentLevel === config.maxLevels) {
+                    if (playerHasKey) { canEnter = true; } 
+                    else { doorMessage = { text: "You need the key!", timer: 120 }; }
+                } else {
+                    canEnter = true;
+                }
+
+                if (canEnter && !doorAnimation.active) {
+                    gameActive = false;
+                    doorAnimation.active = true;
+                    doorAnimation.timer = 0;
+                    doorAnimation.startX = player.x;
+                    doorAnimation.startY = player.y;
+                    doorAnimation.startW = player.width;
+                    doorAnimation.startH = player.height;
+                }
+            }
+        }
+
+        function updateDungeon() {
+            if (!gameActive) return;
+
+            let dx = 0, dy = 0;
+            if (keys.left) { dx = -dungeonPlayer.speed; dungeonPlayer.direction = -1; }
+            if (keys.right) { dx = dungeonPlayer.speed; dungeonPlayer.direction = 1; }
+            if (keys.up) dy = -dungeonPlayer.speed;
+            if (keys.down) dy = dungeonPlayer.speed;
+
+            function isWallColliding(x, y) {
+                let corners = [
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor(y / dungeonCellSize)},
+                    {cx: Math.floor(x / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)},
+                    {cx: Math.floor((x+dungeonPlayer.width-0.1) / dungeonCellSize), cy: Math.floor((y+dungeonPlayer.height-0.1) / dungeonCellSize)}
+                ];
+                return corners.some(c => !dungeonGrid[c.cx] || dungeonGrid[c.cx][c.cy] === 1);
+            }
+
+            if (dx !== 0) {
+                let oldX = dungeonPlayer.x;
+                dungeonPlayer.x += dx;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.x = oldX;
+            }
+            if (dy !== 0) {
+                let oldY = dungeonPlayer.y;
+                dungeonPlayer.y += dy;
+                if (isWallColliding(dungeonPlayer.x, dungeonPlayer.y)) dungeonPlayer.y = oldY;
+            }
+
+            dungeonKeysList.forEach(k => {
+                if (!k.collected && checkCollision(dungeonPlayer, k)) {
+                    k.collected = true;
+                    dungeonKeysCount++;
+                    ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                }
+            });
+
+            dungeonCages.forEach(c => {
+                if (c.active && checkCollision(dungeonPlayer, c)) {
+                    if (dungeonKeysCount > 0) {
+                        dungeonKeysCount--;
+                        c.active = false;
+                        ammoIndicatorEl.textContent = `Keys: ${dungeonKeysCount}`;
+                    } else {
+                        isFullRestartMode = true;
+                        showMessage("Game Over!", false);
+                        messageText.textContent = "Caught in a Cage! No Keys Left.";
+                        restartButton.textContent = "Restart Game";
+                        nextLevelButton.style.display = 'none';
+                    }
+                }
+            });
+
+            if (checkCollision(dungeonPlayer, dungeonExit)) {
+                switchToMap();
+            }
+
+            camera.x = dungeonPlayer.x - canvas.width / 2 + dungeonPlayer.width / 2;
+            camera.y = dungeonPlayer.y - canvas.height / 2 + dungeonPlayer.height / 2;
+            
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > dungeonCols * dungeonCellSize - canvas.width) camera.x = dungeonCols * dungeonCellSize - canvas.width;
+            if (camera.y > dungeonRows * dungeonCellSize - canvas.height) camera.y = dungeonRows * dungeonCellSize - canvas.height;
+        }
+
+        // --- Draw Functions ---
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(star => { ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2); ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`; ctx.fill(); });
+            
+            levelNodes.forEach((node, i) => {
+                const levelNum = i + 1; const isComplete = completedLevels.includes(levelNum);
+                if (mapPlayer.selectedNode === i) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 25, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = isComplete ? '#53bf9d' : node.c1; ctx.beginPath(); ctx.arc(node.x, node.y, 20, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = isComplete ? '#2c7b67' : node.c2; ctx.beginPath(); ctx.arc(node.x + 5, node.y - 5, 18, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = "16px 'Press Start 2P'"; ctx.textAlign = "center"; ctx.fillText(levelNum, node.x, node.y + 6);
+            });
+            
+            ctx.save(); 
+            ctx.translate(mapPlayer.x, mapPlayer.y); 
+            ctx.rotate(mapPlayer.angle + Math.PI / 2); // Adjust rotation to point Goku's head towards direction
+            
+            if (keys.up) {
+                // Flying Ki Aura
+                ctx.fillStyle = 'rgba(249, 115, 0, 0.6)';
+                ctx.beginPath();
+                ctx.arc(0, 20, 15 + Math.random() * 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw a mini Goku flying across the map!
+            ctx.scale(0.5, 0.5);
+            drawPlayer({ x: -20, y: -30, width: 40, height: 60, direction: 1, dx: 0, onGround: false, isMoving: false });
+
+            ctx.restore();
+
+            ctx.fillStyle = 'white'; ctx.font = "20px 'Press Start 2P'"; ctx.textAlign = "center"; ctx.fillText("Select a Planet", canvas.width / 2, 50);
+        }
+
+        function drawLevel() {
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#000010'); skyGradient.addColorStop(0.5, '#16213e'); skyGradient.addColorStop(1, '#4a90e2');
+            ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); ctx.translate(-camera.x * 0.5, 0); drawPlanetBackground(); ctx.restore();
+            ctx.save(); ctx.translate(-camera.x, -camera.y);
+            platforms.forEach(drawPlatform);
+            gems.forEach(gem => { if (!gem.collected) drawGem(gem); });
+            
+            // Draw Zeno on level
+            if (zenoEntity) { drawZenoChar(zenoEntity); }
+            
+            // Draw Zeno Summon Overlay
+            if (zenoSummon.active) {
+                drawZenoChar({ x: zenoSummon.x - 15, y: zenoSummon.y - 20, width: 30, height: 40 });
+                
+                const halfDuration = zenoSummon.duration / 2;
+                if (zenoSummon.timer > halfDuration) {
+                    // Expanding Erase Flash
+                    const progress = (zenoSummon.timer - halfDuration) / halfDuration;
+                    const radius = zenoSummon.maxRadius * progress;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${1 - progress})`;
+                    ctx.beginPath();
+                    ctx.arc(zenoSummon.x, zenoSummon.y, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Charging Up
+                    const progress = zenoSummon.timer / halfDuration;
+                    ctx.fillStyle = `rgba(135, 206, 250, ${progress * 0.5})`;
+                    ctx.beginPath();
+                    ctx.arc(zenoSummon.x, zenoSummon.y, 40 * progress + Math.random() * 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            bullets.forEach(drawBullet);
+            enemies.forEach(drawEnemy);
+            if (boss && !boss.isDefeated) { drawBoss(boss); }
+            if (key && !key.collected) { drawKey(key); }
+            if (currentLevel === config.maxLevels) { drawFinalDoor(door); } else { drawDoor(door); }
+            drawPlayer(player);
+            ctx.restore();
+            if (doorMessage.timer > 0) {
+                ctx.fillStyle = "rgba(255, 255, 0, " + (doorMessage.timer / 200) + ")";
+                ctx.font = "20px 'Press Start 2P'"; ctx.textAlign = "center";
+                ctx.fillText(doorMessage.text, canvas.width / 2, 100);
+            }
+        }
+
+        function drawDungeon() {
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            let startCol = Math.floor(camera.x / dungeonCellSize);
+            let endCol = startCol + (canvas.width / dungeonCellSize) + 1;
+            let startRow = Math.floor(camera.y / dungeonCellSize);
+            let endRow = startRow + (canvas.height / dungeonCellSize) + 1;
+
+            for(let i=Math.max(0, startCol); i<Math.min(dungeonCols, endCol); i++) {
+                for(let j=Math.max(0, startRow); j<Math.min(dungeonRows, endRow); j++) {
+                    if (dungeonGrid[i][j] === 1) {
+                        ctx.fillStyle = '#2b2b36';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                        ctx.strokeStyle = '#111';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    } else {
+                        ctx.fillStyle = '#414152';
+                        ctx.fillRect(i*dungeonCellSize, j*dungeonCellSize, dungeonCellSize, dungeonCellSize);
+                    }
+                }
+            }
+
+            dungeonExit.glow = (dungeonExit.glow || 0) + 0.1;
+            ctx.fillStyle = `rgba(83, 191, 157, ${0.5 + Math.sin(dungeonExit.glow)*0.3})`;
+            ctx.beginPath();
+            ctx.arc(dungeonExit.x + dungeonCellSize/2, dungeonExit.y + dungeonCellSize/2, dungeonCellSize/2 - 5, 0, Math.PI*2);
+            ctx.fill();
+
+            dungeonKeysList.forEach(k => { if(!k.collected) drawDungeonKey(k); });
+            dungeonCages.forEach(c => { if(c.active) drawDungeonCage(c); });
+
+            drawPlayer({
+                x: dungeonPlayer.x, y: dungeonPlayer.y,
+                width: dungeonPlayer.width, height: dungeonPlayer.height,
+                direction: dungeonPlayer.direction,
+                onGround: true, // Let the animation know we are grounded for walking cycles
+                isMoving: (keys.left || keys.right || keys.up || keys.down) 
+            });
+
+            ctx.restore();
+        }
+
+        // --- Game Loop ---
+        let gameLoopId;
+        function gameLoop() {
+            if (gameState === 'map') {
+                updateMap();
+                drawMap();
+            } else if (gameState === 'level') {
+                updateLevel();
+                drawLevel();
+            } else if (gameState === 'dungeon') {
+                updateDungeon();
+                drawDungeon();
+            }
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function checkCollision(r1, r2) { return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x && r1.y < r2.y + r2.height && r1.y + r1.height > r2.y; }
+
+        function showMessage(message, isLevelEnd, gameWon = false) {
+            gameActive = false;
+            messageText.textContent = message;
+            messageBox.style.display = 'flex';
+            if (gameWon) {
+                if (!completedLevels.includes(currentLevel)) { completedLevels.push(currentLevel); }
+                messageText.textContent = `You beat the game! Final Score: ${score}`;
+                nextLevelButton.style.display = 'none';
+                restartButton.textContent = 'Play Again?';
+                restartButton.style.display = 'block';
+                isFullRestartMode = true;
+            } else if (isLevelEnd) {
+                if (!completedLevels.includes(currentLevel)) { completedLevels.push(currentLevel); }
+                mapPlayer.x = levelNodes[currentLevel - 1].x;
+                mapPlayer.y = levelNodes[currentLevel - 1].y;
+                mapPlayer.vx = 0;
+                mapPlayer.vy = 0;
+                nextLevelButton.style.display = 'block';
+                restartButton.style.display = 'none';
+            } else {
+                nextLevelButton.style.display = 'block';
+                restartButton.style.display = 'block';
+            }
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        
+        restartButton.addEventListener('click', () => {
+            messageBox.style.display = 'none';
+            if (isFullRestartMode) {
+                initGame();
+            } else {
+                startLevel(currentLevel);
+            }
+        });
+
+        nextLevelButton.addEventListener('click', () => {
+            switchToMap();
+        });
+
+        // --- Start Game ---
+        window.onload = function() {
+            initGame();
+        }
+    </script>
+</body>
+</html>
