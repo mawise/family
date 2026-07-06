@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Running Interval Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles to prevent text selection and highlight taps */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .bg-run { background-color: #22c55e; } /* Tailwind green-500 */
+        .bg-rest { background-color: #3b82f6; } /* Tailwind blue-500 */
+        .text-run { color: #22c55e; }
+        .text-rest { color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="p-4 text-center border-b border-gray-700 bg-gray-800 shadow-md">
+        <h1 class="text-2xl font-bold tracking-wider">INTERVAL PRO</h1>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center justify-center p-6 relative w-full max-w-md mx-auto">
+
+        <!-- CONFIGURATION VIEW -->
+        <div id="config-view" class="w-full flex flex-col gap-6 w-full animate-fade-in">
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4 text-run flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Run Interval
+                </h2>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-400 mb-1">Minutes</label>
+                        <input type="number" id="run-min" value="1" min="0" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-2xl text-center focus:outline-none focus:border-green-500 transition-colors">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-400 mb-1">Seconds</label>
+                        <input type="number" id="run-sec" value="0" min="0" max="59" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-2xl text-center focus:outline-none focus:border-green-500 transition-colors">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4 text-rest flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    Rest Interval
+                </h2>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-400 mb-1">Minutes</label>
+                        <input type="number" id="rest-min" value="0" min="0" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-2xl text-center focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm text-gray-400 mb-1">Seconds</label>
+                        <input type="number" id="rest-sec" value="30" min="0" max="59" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-2xl text-center focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                </div>
+            </div>
+
+            <button id="start-btn" class="mt-4 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg shadow-green-500/30 transition-all transform hover:scale-105 active:scale-95">
+                START WORKOUT
+            </button>
+        </div>
+
+        <!-- TIMER VIEW -->
+        <div id="timer-view" class="hidden w-full flex flex-col items-center justify-center h-full">
+            <div id="phase-label" class="text-3xl font-black tracking-widest uppercase mb-2">RUNNING</div>
+            <div id="time-display" class="text-8xl font-mono font-bold tracking-tighter mb-12 tabular-nums">00:00</div>
+            
+            <button id="stop-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg shadow-red-500/30 transition-all transform hover:scale-105 active:scale-95">
+                STOP
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // DOM Elements
+        const configView = document.getElementById('config-view');
+        const timerView = document.getElementById('timer-view');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const phaseLabel = document.getElementById('phase-label');
+        const timeDisplay = document.getElementById('time-display');
+
+        // State Variables
+        let timerInterval;
+        let targetTime;
+        let currentPhase = 'run'; // 'run' or 'rest'
+        let runMs = 0;
+        let restMs = 0;
+        let wakeLock = null;
+        let audioCtx = null;
+        let silentOscillator = null;
+
+        // --- Audio & Background Execution Handlers ---
+
+        function initAudioContext() {
+            // Create a Web Audio API context. 
+            // Playing a silent sound continuously keeps the audio interface active,
+            // preventing the mobile OS from shutting down the app/timer in the background.
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+
+            // Create an empty, silent buffer and play it in a loop
+            if (!silentOscillator) {
+                const buffer = audioCtx.createBuffer(1, 1, 22050);
+                silentOscillator = audioCtx.createBufferSource();
+                silentOscillator.buffer = buffer;
+                silentOscillator.loop = true;
+                silentOscillator.connect(audioCtx.destination);
+                silentOscillator.start();
+            }
+            
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function stopAudioContext() {
+            if (audioCtx && audioCtx.state === 'running') {
+                audioCtx.suspend();
+            }
+        }
+
+        // Initialize Speech on user interaction to bypass mobile auto-play policies
+        function unlockSpeech() {
+            const utterance = new SpeechSynthesisUtterance('');
+            utterance.volume = 0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function speak(text) {
+            // Cancel any ongoing speech to prevent queuing lag
+            window.speechSynthesis.cancel(); 
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- Screen Wake Lock ---
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock released');
+                    });
+                }
+            } catch (err) {
+                console.log(`Wake Lock error: ${err.name}, ${err.message}`);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release()
+                    .then(() => { wakeLock = null; });
+            }
+        }
+
+        // --- Timer Logic ---
+
+        function formatTime(ms) {
+            if (ms < 0) ms = 0;
+            const totalSeconds = Math.ceil(ms / 1000);
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function updateUIForPhase(phase) {
+            if (phase === 'run') {
+                document.body.classList.remove('bg-gray-900', 'bg-rest');
+                document.body.classList.add('bg-run');
+                phaseLabel.textContent = "RUNNING";
+                phaseLabel.className = "text-3xl font-black tracking-widest uppercase mb-2 text-white";
+            } else {
+                document.body.classList.remove('bg-gray-900', 'bg-run');
+                document.body.classList.add('bg-rest');
+                phaseLabel.textContent = "RESTING";
+                phaseLabel.className = "text-3xl font-black tracking-widest uppercase mb-2 text-white";
+            }
+        }
+
+        function tick() {
+            const now = Date.now();
+            let remaining = targetTime - now;
+
+            // Phase Switch
+            if (remaining <= 0) {
+                if (currentPhase === 'run') {
+                    currentPhase = 'rest';
+                    targetTime = Date.now() + restMs;
+                    updateUIForPhase('rest');
+                    speak("Start of rest period");
+                } else {
+                    currentPhase = 'run';
+                    targetTime = Date.now() + runMs;
+                    updateUIForPhase('run');
+                    speak("Start of running interval");
+                }
+                remaining = targetTime - Date.now();
+            }
+
+            timeDisplay.textContent = formatTime(remaining);
+        }
+
+        function startWorkout() {
+            // Get input values
+            const rMin = parseInt(document.getElementById('run-min').value) || 0;
+            const rSec = parseInt(document.getElementById('run-sec').value) || 0;
+            const restMin = parseInt(document.getElementById('rest-min').value) || 0;
+            const restSec = parseInt(document.getElementById('rest-sec').value) || 0;
+
+            runMs = ((rMin * 60) + rSec) * 1000;
+            restMs = ((restMin * 60) + restSec) * 1000;
+
+            if (runMs === 0 && restMs === 0) {
+                alert("Please enter a valid time for at least one interval.");
+                return;
+            }
+
+            // Prep Audio & Wake Lock
+            unlockSpeech();
+            initAudioContext();
+            requestWakeLock();
+
+            // Setup state
+            currentPhase = 'run';
+            targetTime = Date.now() + runMs;
+            
+            // Switch UI views
+            configView.classList.add('hidden');
+            timerView.classList.remove('hidden');
+            updateUIForPhase('run');
+            timeDisplay.textContent = formatTime(runMs);
+
+            // Announce & Start Loop
+            speak("Start of running interval");
+            // Use a frequent interval (100ms) but calculate actual time via Date.now() 
+            // to ensure accuracy even if browser throttles the interval timing slightly.
+            timerInterval = setInterval(tick, 100); 
+        }
+
+        function stopWorkout() {
+            // Clear Interval
+            clearInterval(timerInterval);
+            
+            // Reset Audio & Screen Systems
+            stopAudioContext();
+            releaseWakeLock();
+            window.speechSynthesis.cancel();
+            
+            // Reset UI
+            document.body.classList.remove('bg-run', 'bg-rest');
+            document.body.classList.add('bg-gray-900');
+            timerView.classList.add('hidden');
+            configView.classList.remove('hidden');
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', startWorkout);
+        stopBtn.addEventListener('click', stopWorkout);
+
+        // Re-request wake lock if tab becomes visible again
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && !configView.classList.contains('hidden') === false) {
+                requestWakeLock();
+            }
+        });
+
+    </script>
+</body>
+</html>
