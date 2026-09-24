@@ -13,7 +13,7 @@
             justify-content: center;
             align-items: center;
             text-align: center;
-            transition: background-color 0.3s ease; /* Made transition snappier */
+            transition: background-color 0.3s ease;
             background-color: #f4f4f9; 
             color: #333;
         }
@@ -63,6 +63,23 @@
         }
 
         button:hover { background-color: #555; }
+
+        .secondary-btn {
+            background-color: #6c757d;
+            padding: 10px;
+            font-size: 1rem;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .secondary-btn:hover { background-color: #5a6268; }
+
+        #multi-sets-container {
+            display: none;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+            margin-top: 5px;
+        }
         
         #timer-display { display: none; }
 
@@ -80,9 +97,10 @@
             line-height: 1;
         }
 
-        .set-text {
+        .rep-text {
             font-size: 1.5rem;
             color: #555;
+            margin: 5px 0;
         }
 
         #reset-btn {
@@ -93,9 +111,10 @@
         }
 
         /* Colors */
-        body.work-mode { background-color: #4CAF50; } /* Green */
-        body.rest-mode { background-color: #2196F3; } /* Blue */
-        body.done-mode { background-color: #9C27B0; } /* Purple */
+        body.work-mode { background-color: #4CAF50; }     /* Green */
+        body.rest-mode { background-color: #2196F3; }     /* Blue */
+        body.set-rest-mode { background-color: #FF9800; } /* Orange */
+        body.done-mode { background-color: #9C27B0; }     /* Purple */
     </style>
 </head>
 <body>
@@ -105,18 +124,32 @@
             <h1>Workout Setup</h1>
             
             <div class="input-group">
-                <label>Number of Sets (Reps)</label>
-                <input type="number" id="sets" value="5" min="1">
+                <label for="reps">Number of Reps</label>
+                <input type="number" id="reps" value="5" min="1">
             </div>
 
             <div class="input-group">
-                <label>Work Time (seconds)</label>
+                <label for="work-time">Work Time (seconds)</label>
                 <input type="number" id="work-time" value="30" min="1">
             </div>
 
             <div class="input-group">
-                <label>Rest Time (seconds)</label>
+                <label for="rest-time">Rest Time (seconds)</label>
                 <input type="number" id="rest-time" value="10" min="0">
+            </div>
+
+            <button type="button" id="multi-sets-btn" class="secondary-btn" onclick="enableMultipleSets()">Multiple Sets?</button>
+
+            <div id="multi-sets-container">
+                <div class="input-group">
+                    <label for="sets">Number of Sets</label>
+                    <input type="number" id="sets" value="3" min="1">
+                </div>
+
+                <div class="input-group">
+                    <label for="set-rest-time">Rest Between Sets (seconds)</label>
+                    <input type="number" id="set-rest-time" value="60" min="0">
+                </div>
             </div>
 
             <button onclick="startWorkout()">Start Workout</button>
@@ -125,16 +158,21 @@
         <div id="timer-display">
             <div class="status-text" id="status-label">GO!</div>
             <div class="time-text" id="time-left">0</div>
-            <div class="set-text" id="set-count">Set 1 / 5</div>
+            <div class="rep-text" id="rep-count">Rep 1 / 5</div>
+            <div class="rep-text" id="set-count" style="display: none;">Set 1 / 3</div>
             <button id="reset-btn" onclick="resetApp()">Stop / Reset</button>
         </div>
     </div>
 
     <script>
-        let totalSets, workDuration, restDuration;
+        let totalReps, workDuration, restDuration;
+        let totalSets = 1, setRestDuration = 0;
+        let useMultipleSets = false;
+
+        let currentRep = 1;
         let currentSet = 1;
         let currentTime = 0;
-        let isWorking = true; 
+        let currentPhase = 'WORK'; // 'WORK', 'REP_REST', or 'SET_REST'
         let timerInterval = null;
 
         const body = document.body;
@@ -142,40 +180,64 @@
         const timerDisplay = document.getElementById('timer-display');
         const statusLabel = document.getElementById('status-label');
         const timeLeft = document.getElementById('time-left');
+        const repCount = document.getElementById('rep-count');
         const setCount = document.getElementById('set-count');
+        const multiSetsBtn = document.getElementById('multi-sets-btn');
+        const multiSetsContainer = document.getElementById('multi-sets-container');
+
+        function enableMultipleSets() {
+            useMultipleSets = true;
+            multiSetsBtn.style.display = 'none';
+            multiSetsContainer.style.display = 'block';
+        }
 
         function startWorkout() {
-            totalSets = parseInt(document.getElementById('sets').value);
+            totalReps = parseInt(document.getElementById('reps').value);
             workDuration = parseInt(document.getElementById('work-time').value);
             restDuration = parseInt(document.getElementById('rest-time').value);
 
-            if (!totalSets || !workDuration) {
+            if (useMultipleSets) {
+                totalSets = parseInt(document.getElementById('sets').value);
+                setRestDuration = parseInt(document.getElementById('set-rest-time').value);
+            } else {
+                totalSets = 1;
+                setRestDuration = 0;
+            }
+
+            if (!totalReps || !workDuration || isNaN(restDuration) || (useMultipleSets && (!totalSets || isNaN(setRestDuration)))) {
                 alert("Please enter valid numbers");
                 return;
             }
 
             setupScreen.style.display = 'none';
             timerDisplay.style.display = 'block';
+            setCount.style.display = totalSets > 1 ? 'block' : 'none';
 
+            currentRep = 1;
             currentSet = 1;
             startWorkPhase();
         }
 
         function startWorkPhase() {
-            isWorking = true;
+            currentPhase = 'WORK';
             currentTime = workDuration;
             
             body.className = 'work-mode';
             statusLabel.innerText = "WORK";
-            // statusLabel.style.color = "#fff"; 
             updateDisplay();
 
             clearInterval(timerInterval);
             timerInterval = setInterval(tick, 1000);
         }
 
-        function startRestPhase() {
-            isWorking = false;
+        function startRepRestPhase() {
+            if (restDuration <= 0) {
+                currentRep++;
+                startWorkPhase();
+                return;
+            }
+
+            currentPhase = 'REP_REST';
             currentTime = restDuration;
 
             body.className = 'rest-mode';
@@ -186,10 +248,28 @@
             timerInterval = setInterval(tick, 1000);
         }
 
+        function startSetRestPhase() {
+            if (setRestDuration <= 0) {
+                currentSet++;
+                currentRep = 1;
+                startWorkPhase();
+                return;
+            }
+
+            currentPhase = 'SET_REST';
+            currentTime = setRestDuration;
+
+            body.className = 'set-rest-mode';
+            statusLabel.innerText = "SET REST";
+            updateDisplay();
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(tick, 1000);
+        }
+
         function tick() {
             currentTime--;
             
-            // FIX: Check if we hit zero immediately
             if (currentTime <= 0) {
                 handlePhaseSwitch();
             } else {
@@ -200,30 +280,38 @@
         function handlePhaseSwitch() {
             clearInterval(timerInterval); 
 
-            if (isWorking) {
-                // Work just finished
-                if (currentSet < totalSets) {
-                    startRestPhase();
+            if (currentPhase === 'WORK') {
+                if (currentRep < totalReps) {
+                    startRepRestPhase();
+                } else if (currentSet < totalSets) {
+                    startSetRestPhase();
                 } else {
                     finishWorkout();
                 }
-            } else {
-                // Rest just finished
+            } else if (currentPhase === 'REP_REST') {
+                currentRep++;
+                startWorkPhase();
+            } else if (currentPhase === 'SET_REST') {
                 currentSet++;
+                currentRep = 1;
                 startWorkPhase();
             }
         }
 
         function updateDisplay() {
             timeLeft.innerText = currentTime;
-            setCount.innerText = `Set ${currentSet} / ${totalSets}`;
+            repCount.innerText = `Rep ${currentRep} / ${totalReps}`;
+            if (totalSets > 1) {
+                setCount.innerText = `Set ${currentSet} / ${totalSets}`;
+            }
         }
 
         function finishWorkout() {
             body.className = 'done-mode';
             statusLabel.innerText = "DONE!";
             timeLeft.innerText = "✓";
-            setCount.innerText = "Great Job";
+            repCount.innerText = "Great Job";
+            setCount.style.display = 'none';
         }
 
         function resetApp() {
