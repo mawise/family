@@ -1,0 +1,2235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Trail & Tent: A Camping Adventure</title>
+<style>
+  :root {
+    --bg-dark: #1b262c;
+    --wood: #8d5524;
+    --wood-light: #c68642;
+    --leaf: #2d6a4f;
+    --sky-day: linear-gradient(180deg, #74b9ff 0%, #c7ecee 70%, #78e08f 70%, #38ada9 100%);
+    --sky-evening: linear-gradient(180deg, #1e272e 0%, #485460 40%, #d2dae2 68%, #218c74 68%, #145a32 100%);
+    --panel-bg: rgba(25, 35, 45, 0.92);
+    --accent: #f39c12;
+  }
+
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-dark);
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #game-container {
+    position: relative;
+    width: 1000px;
+    height: 650px;
+    max-width: 100vw;
+    max-height: 100vh;
+    background: #2c3e50;
+    border: 4px solid #34495e;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    width: 100%;
+    height: 100%;
+  }
+
+  .screen.active {
+    display: block;
+  }
+
+  /* Top Status & Hint Bar */
+  #hint-banner {
+    position: absolute;
+    top: 10px;
+    left: 16px;
+    right: 260px;
+    background: rgba(15, 23, 30, 0.86);
+    border-left: 5px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.35;
+    z-index: 60;
+    pointer-events: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+  }
+
+  #hint-banner strong {
+    color: #ffd166;
+  }
+
+  /* Dev / Testing Bar for Trip Counts */
+  #stats-bar {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    background: rgba(0,0,0,0.65);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 80;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .dev-btn {
+    background: #445;
+    color: #ddd;
+    border: 1px solid #667;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .dev-btn:hover { background: #556; }
+
+  /* 1. OPENING SCREEN */
+  #screen-title {
+    background: radial-gradient(circle at 50% 30%, #2c5364, #203a43, #0f2027);
+    text-align: center;
+    padding-top: 55px;
+  }
+
+  #screen-title h1 {
+    font-size: 42px;
+    margin: 0 0 8px;
+    letter-spacing: 1px;
+    color: #ffeaa7;
+    text-shadow: 0 3px 8px rgba(0,0,0,0.6);
+  }
+
+  #screen-title p.subtitle {
+    color: #b2bec3;
+    margin: 0 0 60px;
+    font-size: 16px;
+  }
+
+  .transport-grid {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+    margin-top: 30px;
+  }
+
+  .transport-card {
+    position: relative;
+    width: 210px;
+    height: 240px;
+    background: rgba(255,255,255,0.08);
+    border: 3px solid #55efc4;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .transport-card:hover:not(.locked) {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 24px rgba(85, 239, 196, 0.25);
+    background: rgba(255,255,255,0.14);
+  }
+
+  .transport-card.locked {
+    filter: grayscale(100%);
+    opacity: 0.55;
+    border-color: #636e72;
+    cursor: not-allowed;
+  }
+
+  .transport-icon {
+    font-size: 74px;
+    margin-bottom: 14px;
+  }
+
+  .transport-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+
+  .transport-progress {
+    font-size: 12px;
+    color: #dfe6e9;
+    padding: 0 12px;
+  }
+
+  .lock-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 28px;
+    background: rgba(0,0,0,0.7);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bouncing-arrow {
+    position: absolute;
+    top: -68px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 46px;
+    color: #fdcb6e;
+    animation: bounceArrow 1s infinite alternate ease-in-out;
+    pointer-events: none;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    white-space: nowrap;
+  }
+
+  .bouncing-arrow span {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    background: #d63031;
+    color: #fff;
+    padding: 3px 9px;
+    border-radius: 12px;
+    margin-bottom: -6px;
+  }
+
+  @keyframes bounceArrow {
+    from { transform: translate(-50%, 0); }
+    to { transform: translate(-50%, -14px); }
+  }
+
+  /* 2. HOUSE SCREEN (BEDROOM & KITCHEN SWIPE) */
+  #screen-house {
+    overflow: hidden;
+  }
+
+  #house-slider {
+    width: 200%;
+    height: 100%;
+    display: flex;
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .room {
+    width: 50%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Bedroom styling */
+  #room-bedroom {
+    background: linear-gradient(180deg, #4a6984 0%, #4a6984 68%, #8c583a 68%, #6d422a 100%);
+  }
+
+  .room-label {
+    position: absolute;
+    top: 68px;
+    left: 20px;
+    font-size: 22px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.45);
+    padding: 6px 14px;
+    border-radius: 8px;
+  }
+
+  .swipe-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    border: 2px solid #ffeaa7;
+    padding: 14px 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: bold;
+    z-index: 40;
+    transition: background 0.2s;
+  }
+  .swipe-nav:hover { background: rgba(243, 156, 18, 0.85); }
+  #to-kitchen-btn { right: 255px; }
+  #to-bedroom-btn { left: 16px; }
+
+  /* Bedroom Furniture */
+  .window-frame {
+    position: absolute;
+    top: 90px;
+    left: 220px;
+    width: 130px;
+    height: 130px;
+    background: #81ecec;
+    border: 8px solid #dfe6e9;
+    border-radius: 6px;
+    box-shadow: inset 0 0 20px rgba(255,255,255,0.8);
+  }
+  .window-frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-top: 4px solid #dfe6e9;
+    border-left: 4px solid #dfe6e9;
+    width: 50%;
+    height: 50%;
+  }
+
+  .bed-frame {
+    position: absolute;
+    bottom: 130px;
+    left: 40px;
+    width: 230px;
+    height: 110px;
+    background: #6c5ce7;
+    border-top: 18px solid #dfe6e9;
+    border-left: 14px solid #574b90;
+    border-right: 10px solid #574b90;
+    border-radius: 8px 8px 0 0;
+  }
+
+  /* Chest of Drawers */
+  .dresser {
+    position: absolute;
+    bottom: 130px;
+    left: 390px;
+    width: 240px;
+    height: 210px;
+    background: #a0522d;
+    border: 5px solid #5c2c16;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 10px;
+  }
+
+  .drawer {
+    position: relative;
+    height: 82px;
+    background: #cd853f;
+    border: 3px solid #5c2c16;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s, background 0.25s;
+  }
+
+  .drawer-handle {
+    width: 50px;
+    height: 10px;
+    background: #ffd166;
+    border-radius: 5px;
+    border: 2px solid #8d5524;
+    pointer-events: none;
+  }
+
+  .drawer.open {
+    background: #3d2314;
+    transform: translateY(6px);
+    box-shadow: inset 0 8px 16px rgba(0,0,0,0.75);
+  }
+
+  .drawer.open .drawer-handle {
+    display: none;
+  }
+
+  .drawer-label {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.75);
+    pointer-events: none;
+  }
+
+  /* Kitchen Styling */
+  #room-kitchen {
+    background: linear-gradient(180deg, #f7d794 0%, #f7d794 68%, #95afc0 68%, #535c68 100%);
+  }
+
+  .kitchen-counter {
+    position: absolute;
+    bottom: 120px;
+    left: 110px;
+    width: 560px;
+    height: 165px;
+    background: #b33939;
+    border-top: 18px solid #dcdde1;
+    border-left: 6px solid #7f8fa6;
+    border-right: 6px solid #7f8fa6;
+    border-radius: 4px;
+  }
+
+  .kitchen-shelf {
+    position: absolute;
+    top: 150px;
+    left: 140px;
+    width: 500px;
+    height: 16px;
+    background: #8d5524;
+    border-bottom: 5px solid #5c2c16;
+    border-radius: 4px;
+  }
+
+  /* BACKPACK WIDGET (PERSISTENT TOP-RIGHT) */
+  #backpack-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 230px;
+    background: var(--panel-bg);
+    border: 3px solid #e67e22;
+    border-radius: 14px;
+    padding: 10px;
+    z-index: 70;
+    display: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  }
+
+  #backpack-panel.visible {
+    display: block;
+  }
+
+  .bp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 6px;
+    color: #f39c12;
+  }
+
+  .bp-layer {
+    background: rgba(255,255,255,0.06);
+    border: 2px dashed rgba(255,255,255,0.22);
+    border-radius: 8px;
+    padding: 6px;
+    margin-bottom: 8px;
+  }
+
+  .bp-layer-title {
+    font-size: 11px;
+    color: #bdc3c7;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .bp-slots {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    min-height: 60px;
+  }
+
+  .bp-slot {
+    height: 58px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  #done-packing-btn {
+    width: 100%;
+    padding: 10px;
+    background: #27ae60;
+    color: white;
+    font-weight: bold;
+    font-size: 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #1e8449;
+    transition: transform 0.1s, background 0.2s;
+  }
+  #done-packing-btn:hover { background: #2ecc71; }
+  #done-packing-btn:active { transform: translateY(2px); }
+
+  /* DRAGGABLE ITEMS */
+  .item {
+    width: 62px;
+    height: 62px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 3px solid #2d3436;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    position: absolute;
+    z-index: 30;
+    color: #2d3436;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    transition: box-shadow 0.15s;
+  }
+
+  .item.in-slot {
+    position: static;
+    width: 54px;
+    height: 54px;
+    border-width: 2px;
+  }
+
+  .item.dragging {
+    cursor: grabbing;
+    z-index: 999 !important;
+    transform: scale(1.1);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.6);
+  }
+
+  .item-emoji {
+    font-size: 27px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .item-name {
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.05;
+    margin-top: 2px;
+    pointer-events: none;
+  }
+
+  .item-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 6px;
+    color: #fff;
+    pointer-events: none;
+  }
+  .badge-raw { background: #e74c3c; }
+  .badge-cooked { background: #27ae60; }
+
+  /* 3. MAP SCREEN */
+  #screen-map {
+    background: #d2b48c;
+    background-image: radial-gradient(#c19a6b 15%, transparent 16%), radial-gradient(#c19a6b 15%, transparent 16%);
+    background-size: 40px 40px;
+    background-position: 0 0, 20px 20px;
+    color: #2c1e14;
+  }
+
+  .map-header {
+    position: absolute;
+    top: 14px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(44, 30, 20, 0.9);
+    color: #ffeaa7;
+    padding: 12px 20px;
+    border-radius: 10px;
+    z-index: 20;
+  }
+
+  #map-canvas-area {
+    position: absolute;
+    inset: 80px 20px 20px 20px;
+    background: #e6ccb2;
+    border: 5px solid #6f4e37;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .trail-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .trail-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 155px;
+    background: #fff8dc;
+    border: 3px solid #27ae60;
+    border-radius: 12px;
+    padding: 8px 10px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.28);
+    transition: transform 0.15s;
+    text-align: center;
+  }
+
+  .trail-node:hover {
+    transform: translate(-50%, -54%) scale(1.05);
+    background: #fff;
+  }
+
+  .trail-node .node-title {
+    font-weight: bold;
+    font-size: 14px;
+    color: #1e3799;
+  }
+
+  .trail-node .node-time {
+    font-size: 11px;
+    color: #555;
+    margin: 2px 0;
+  }
+
+  .trail-node .node-hazards {
+    font-size: 12px;
+    background: #ffeaa7;
+    border-radius: 6px;
+    padding: 2px 6px;
+    margin-top: 4px;
+    display: inline-block;
+    font-weight: bold;
+    color: #b71540;
+  }
+
+  /* 4. CAMPSITE SCREEN */
+  #screen-camp {
+    background: var(--sky-day);
+    transition: background 1s ease;
+  }
+
+  #screen-camp.evening {
+    background: var(--sky-evening);
+  }
+
+  /* Tree & Branch for Rope Hanging */
+  #camp-tree {
+    position: absolute;
+    bottom: 160px;
+    left: 35px;
+    width: 190px;
+    height: 360px;
+    pointer-events: auto;
+  }
+
+  .tree-trunk {
+    position: absolute;
+    bottom: 0;
+    left: 65px;
+    width: 46px;
+    height: 220px;
+    background: #5c3a21;
+    border-radius: 6px;
+  }
+
+  .tree-branch {
+    position: absolute;
+    top: 150px;
+    left: 95px;
+    width: 120px;
+    height: 18px;
+    background: #5c3a21;
+    border-radius: 6px;
+  }
+
+  .tree-canopy {
+    position: absolute;
+    top: 10px;
+    left: 5px;
+    width: 210px;
+    height: 155px;
+    background: #1e5631;
+    border-radius: 50%;
+    box-shadow: inset -15px -15px 0 rgba(0,0,0,0.2);
+  }
+
+  #hanging-rope-zone {
+    position: absolute;
+    top: 168px;
+    left: 150px;
+    width: 68px;
+    height: 120px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #hanging-rope-zone.active {
+    display: flex;
+  }
+
+  .rope-line {
+    width: 4px;
+    height: 55px;
+    background: repeating-linear-gradient(45deg, #d2b48c, #d2b48c 4px, #8b5a2b 4px, #8b5a2b 8px);
+  }
+
+  .rope-bag {
+    min-width: 72px;
+    min-height: 54px;
+    background: rgba(243, 156, 18, 0.25);
+    border: 2px dashed #ffeaa7;
+    border-radius: 10px;
+    padding: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Picnic Table */
+  #picnic-table {
+    position: absolute;
+    bottom: 115px;
+    left: 235px;
+    width: 150px;
+    height: 80px;
+  }
+
+  .table-top {
+    width: 150px;
+    height: 18px;
+    background: #8d5524;
+    border: 3px solid #5c2c16;
+    border-radius: 4px;
+  }
+  .table-legs {
+    width: 110px;
+    height: 55px;
+    margin: 0 auto;
+    border-left: 10px solid #6d422a;
+    border-right: 10px solid #6d422a;
+  }
+
+  /* Bear Box */
+  #bear-box {
+    position: absolute;
+    bottom: 130px;
+    left: 30px;
+    width: 115px;
+    height: 82px;
+    background: #576574;
+    border: 4px solid #222f3e;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #ffeaa7;
+  }
+
+  #bear-box-items {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 2px;
+  }
+
+  /* Tent Area */
+  #camp-tent {
+    position: absolute;
+    bottom: 125px;
+    right: 265px;
+    width: 230px;
+    height: 165px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    transition: transform 0.15s;
+  }
+  #camp-tent:hover { transform: scale(1.03); }
+
+  .tent-unpitched {
+    width: 170px;
+    height: 48px;
+    background: #e67e22;
+    border: 4px solid #a04000;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 13px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+  }
+
+  .tent-pitched {
+    position: relative;
+    width: 0;
+    height: 0;
+    border-left: 110px solid transparent;
+    border-right: 110px solid transparent;
+    border-bottom: 145px solid #e67e22;
+    display: none;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,0.45));
+  }
+
+  .tent-doorFlap {
+    position: absolute;
+    top: 55px;
+    left: -38px;
+    width: 0;
+    height: 0;
+    border-left: 38px solid transparent;
+    border-right: 38px solid transparent;
+    border-bottom: 90px solid #2d3436;
+  }
+
+  .tent-tarp-cover {
+    position: absolute;
+    top: -12px;
+    left: -115px;
+    width: 230px;
+    height: 75px;
+    background: rgba(9, 132, 227, 0.88);
+    border: 3px solid #74b9ff;
+    border-radius: 10px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .tent-status-badges {
+    position: absolute;
+    top: -26px;
+    display: flex;
+    gap: 6px;
+    font-size: 12px;
+    background: rgba(0,0,0,0.7);
+    padding: 3px 9px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  /* Campfire Area */
+  #campfire-pit {
+    position: absolute;
+    bottom: 65px;
+    left: 430px;
+    width: 140px;
+    height: 110px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .fire-stones {
+    width: 120px;
+    height: 36px;
+    background: radial-gradient(circle, #3d3d3d 40%, #7f8c8d 75%);
+    border: 5px dotted #95a5a6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .fire-flame {
+    font-size: 54px;
+    line-height: 1;
+    margin-bottom: -12px;
+    display: none;
+    animation: flicker 0.35s infinite alternate;
+    pointer-events: none;
+  }
+
+  @keyframes flicker {
+    from { transform: scale(1) rotate(-3deg); }
+    to { transform: scale(1.12) rotate(3deg); }
+  }
+
+  #fire-meter-wrap {
+    width: 110px;
+    height: 10px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 5px;
+    margin-top: 5px;
+    overflow: hidden;
+    border: 1px solid #fff;
+  }
+
+  #fire-meter-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #e74c3c, #f1c40f);
+    transition: width 0.3s;
+  }
+
+  /* Return Home Transport Icon */
+  #return-home-btn {
+    position: absolute;
+    bottom: 35px;
+    right: 35px;
+    background: #27ae60;
+    border: 4px solid #ffeaa7;
+    border-radius: 18px;
+    padding: 12px 20px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    animation: bounceHome 0.9s infinite alternate;
+    z-index: 75;
+  }
+
+  @keyframes bounceHome {
+    from { transform: translateY(0); }
+    to { transform: translateY(-8px); }
+  }
+
+  /* 5. TENT INTERIOR SCREEN */
+  #screen-tent-inside {
+    background: radial-gradient(circle at 50% 60%, #d35400, #6e2c00 85%);
+  }
+
+  .tent-interior-walls {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #tent-exit-door {
+    position: absolute;
+    top: 85px;
+    left: 80px;
+    width: 160px;
+    height: 250px;
+    background: #1e272e;
+    border: 6px solid #f39c12;
+    border-radius: 80px 80px 0 0;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #ffeaa7;
+    font-weight: bold;
+    box-shadow: inset 0 0 25px rgba(0,0,0,0.9);
+  }
+  #tent-exit-door:hover { background: #2f3640; }
+
+  #inside-sleeping-bag {
+    position: absolute;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    height: 135px;
+    background: #2980b9;
+    border: 6px solid #74b9ff;
+    border-radius: 65px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 22px;
+    font-weight: bold;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    transition: transform 0.2s;
+  }
+  #inside-sleeping-bag:hover {
+    transform: translateX(-50%) scale(1.04);
+    background: #3498db;
+  }
+
+  /* OVERLAY FOR BLACK SCREEN TIME PASSAGE / MORNING */
+  #black-overlay {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.65s ease;
+  }
+
+  #black-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #overlay-title {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffeaa7;
+    margin-bottom: 12px;
+  }
+
+  #overlay-sub {
+    font-size: 18px;
+    color: #dfe6e9;
+    max-width: 550px;
+    text-align: center;
+  }
+
+  /* Toast notification */
+  #toast {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.88);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 25px;
+    border: 2px solid #fdcb6e;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 400;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Rain visual effect */
+  .rain-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(170deg, transparent, transparent 18px, rgba(174, 214, 241, 0.22) 18px, rgba(174, 214, 241, 0.22) 20px);
+    display: none;
+    z-index: 15;
+  }
+  .rain-overlay.active { display: block; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <!-- Dynamic Hint Banner -->
+  <div id="hint-banner">Welcome! Click on the <strong>Hiking Shoes</strong> to start preparing for your camping trip.</div>
+
+  <!-- Persistent Backpack (Top-Right in House & Campsite) -->
+  <div id="backpack-panel">
+    <div class="bp-header">
+      <span>🎒 Backpack</span>
+      <span id="bp-count-label">0 / 6</span>
+    </div>
+    <div class="bp-layer">
+      <div class="bp-layer-title"><span>Layer 1 (Bottom)</span><span>Max 3</span></div>
+      <div class="bp-slots" id="bp-layer-1">
+        <div class="bp-slot" data-layer="1" data-slot="0"></div>
+        <div class="bp-slot" data-layer="1" data-slot="1"></div>
+        <div class="bp-slot" data-layer="1" data-slot="2"></div>
+      </div>
+    </div>
+    <div class="bp-layer">
+      <div class="bp-layer-title"><span>Layer 2 (Top)</span><span>Max 3</span></div>
+      <div class="bp-slots" id="bp-layer-2">
+        <div class="bp-slot" data-layer="2" data-slot="0"></div>
+        <div class="bp-slot" data-layer="2" data-slot="1"></div>
+        <div class="bp-slot" data-layer="2" data-slot="2"></div>
+      </div>
+    </div>
+    <button id="done-packing-btn">Done Packing ➔</button>
+  </div>
+
+  <!-- 1. OPENING TRANSPORT SCREEN -->
+  <div id="screen-title" class="screen active">
+    <h1>⛺ Trail & Tent</h1>
+    <p class="subtitle">Pack your gear, brave the wilderness, and unlock new camping horizons!</p>
+
+    <div class="transport-grid">
+      <!-- Shoes -->
+      <div class="transport-card" id="card-shoes" onclick="selectTransport('shoes')">
+        <div class="bouncing-arrow" id="shoes-arrow">
+          <span>CLICK HERE</span>
+          ⬇
+        </div>
+        <div class="transport-icon">🥾</div>
+        <div class="transport-title">Hiking Shoes</div>
+        <div class="transport-progress" id="prog-shoes">Backpacking Trips: 0 / 10</div>
+      </div>
+
+      <!-- Bike -->
+      <div class="transport-card locked" id="card-bike" onclick="selectTransport('bike')">
+        <div class="lock-badge" id="lock-bike">🔒</div>
+        <div class="transport-icon">🚲</div>
+        <div class="transport-title">Touring Bike</div>
+        <div class="transport-progress" id="prog-bike">Unlock after 10 Shoe Trips</div>
+      </div>
+
+      <!-- Car -->
+      <div class="transport-card locked" id="card-car" onclick="selectTransport('car')">
+        <div class="lock-badge" id="lock-car">🔒</div>
+        <div class="transport-icon">🚙</div>
+        <div class="transport-title">Camp Cruiser</div>
+        <div class="transport-progress" id="prog-car">Unlock after 20 Bike Trips</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. HOUSE SCREEN (SWIPE BETWEEN BEDROOM & KITCHEN) -->
+  <div id="screen-house" class="screen">
+    <div id="house-slider">
+      <!-- Bedroom -->
+      <div class="room" id="room-bedroom">
+        <div class="room-label">🛏️ Bedroom <small style="font-size:12px;font-weight:normal;">(Swipe left or click button for Kitchen)</small></div>
+        <div class="window-frame"></div>
+        <div class="bed-frame"></div>
+
+        <!-- Chest of Drawers -->
+        <div class="dresser">
+          <div class="drawer" id="drawer-books" onclick="toggleDrawer('books')">
+            <span class="drawer-label">Top Drawer (Click to open)</span>
+            <div class="drawer-handle"></div>
+          </div>
+          <div class="drawer" id="drawer-toys" onclick="toggleDrawer('toys')">
+            <span class="drawer-label">Bottom Drawer (Click to open)</span>
+            <div class="drawer-handle"></div>
+          </div>
+        </div>
+
+        <button class="swipe-nav" id="to-kitchen-btn" onclick="switchRoom('kitchen')">Swipe to Kitchen ➡</button>
+      </div>
+
+      <!-- Kitchen -->
+      <div class="room" id="room-kitchen">
+        <div class="room-label" style="color:#fff;">🍳 Kitchen <small style="font-size:12px;font-weight:normal;">(Drag food & matches to backpack)</small></div>
+        <div class="kitchen-shelf"></div>
+        <div class="kitchen-counter"></div>
+
+        <button class="swipe-nav" id="to-bedroom-btn" onclick="switchRoom('bedroom')">⬅ Swipe to Bedroom</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. MAP SCREEN -->
+  <div id="screen-map" class="screen">
+    <div class="map-header">
+      <div>
+        <strong id="map-title" style="font-size:18px;">🗺️ Backcountry Footpath Map</strong>
+        <div style="font-size:12px;color:#dfe6e9;">Click an unlocked trail to hike to the campsite. Watch for hazard icons!</div>
+      </div>
+      <button class="dev-btn" style="padding:6px 12px;font-size:13px;" onclick="returnToPacking()">⬅ Back to House</button>
+    </div>
+
+    <div id="map-canvas-area">
+      <svg class="trail-svg" id="trail-svg"></svg>
+      <div id="trail-nodes-container"></div>
+    </div>
+  </div>
+
+  <!-- 4. CAMPSITE SCREEN -->
+  <div id="screen-camp" class="screen">
+    <div class="rain-overlay" id="rain-fx"></div>
+
+    <!-- Tree with branch for hanging rope & food -->
+    <div id="camp-tree">
+      <div class="tree-canopy"></div>
+      <div class="tree-trunk"></div>
+      <div class="tree-branch"></div>
+      <div id="hanging-rope-zone">
+        <div class="rope-line"></div>
+        <div class="rope-bag" id="rope-food-bag" title="Drag food here to hang out of reach of critters"></div>
+      </div>
+    </div>
+
+    <!-- Bear Box (for Bear Country hazard precaution) -->
+    <div id="bear-box">
+      <span>🐻 Bear Box</span>
+      <div id="bear-box-items"></div>
+    </div>
+
+    <!-- Picnic Table -->
+    <div id="picnic-table">
+      <div class="table-top"></div>
+      <div class="table-legs"></div>
+    </div>
+
+    <!-- Campfire -->
+    <div id="campfire-pit">
+      <div class="fire-flame" id="fire-flame">🔥</div>
+      <div class="fire-stones" id="fire-stones-label">Unlit Pit</div>
+      <div id="fire-meter-wrap">
+        <div id="fire-meter-bar"></div>
+      </div>
+    </div>
+
+    <!-- Tent -->
+    <div id="camp-tent" onclick="handleTentClick()">
+      <div class="tent-status-badges" id="tent-badges">Click to Pitch Tent</div>
+      <div class="tent-unpitched" id="tent-unpitched-view">⛺ Rolled Tent</div>
+      <div class="tent-pitched" id="tent-pitched-view">
+        <div class="tent-tarp-cover" id="tent-tarp-visual">🛡️ Waterproof Tarp</div>
+        <div class="tent-doorFlap"></div>
+      </div>
+    </div>
+
+    <!-- Return Home Transport Icon (Appears in Morning once packed up) -->
+    <button id="return-home-btn" onclick="completeTripAndGoHome()">
+      <span id="return-transport-emoji" style="font-size:28px;">🥾</span>
+      <span>Head Home!</span>
+    </button>
+  </div>
+
+  <!-- 5. TENT INTERIOR SCREEN -->
+  <div id="screen-tent-inside" class="screen">
+    <div class="tent-interior-walls">
+      <div id="tent-exit-door" onclick="exitTentToCampsite()">
+        <span style="font-size:36px;">🏕️</span>
+        <span>Tent Door</span>
+        <small style="margin-top:6px;color:#ccc;">Click to go outside</small>
+      </div>
+
+      <div id="inside-sleeping-bag" onclick="sleepInTent()">
+        <span style="font-size:38px;">🛌</span>
+        <div>
+          <div>Sleeping Bag</div>
+          <div style="font-size:13px;font-weight:normal;color:#dff9fb;">Click to sleep until Next Morning</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FADE TO BLACK OVERLAY -->
+  <div id="black-overlay">
+    <div id="overlay-title">Half an hour later...</div>
+    <div id="overlay-sub"></div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
+
+  <!-- Stats & Quick Test Bar -->
+  <div id="stats-bar">
+    <span id="stats-text">🥾 Shoes: 0/10 | 🚲 Bike: 0/20 | 🚙 Car: 0</span>
+    <button class="dev-btn" onclick="devAddTrips('shoes', 10)" title="Quick-test Bike Unlock">+10 Shoe Trips</button>
+    <button class="dev-btn" onclick="devAddTrips('bike', 20)" title="Quick-test Car Unlock">+20 Bike Trips</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   GAME STATE & DATA DEFINITIONS
+   ============================================================================ */
+const state = {
+  screen: 'title',
+  transport: 'shoes', // 'shoes' | 'bike' | 'car'
+  room: 'bedroom',    // 'bedroom' | 'kitchen'
+  drawers: { books: false, toys: false },
+  trips: { shoes: 0, bike: 0, car: 0 },
+  unlockedHikes: { shoes: 1, bike: 1, car: 1 },
+  currentHike: null,
+
+  // Backpack holds 2 layers of 3 slots each (6 total)
+  backpack: [
+    [null, null, null], // Layer 1
+    [null, null, null]  // Layer 2
+  ],
+
+  // Master item list
+  items: [],
+
+  // Campsite state
+  camp: {
+    timeOfDay: 'evening', // 'evening' | 'morning'
+    tentPitched: false,
+    sleepingBagInTent: false,
+    tarpOnTent: false,
+    ropeOnTree: false,
+    fireWood: 0,
+    fireLit: false,
+    fireLevel: 0, // 0 to 100
+    sleptOnce: false
+  }
+};
+
+// Maps & Hikes per Transport Mode
+const MAPS = {
+  shoes: {
+    name: "🥾 Backpacking Footpath Map",
+    icon: "🥾",
+    hikes: [
+      { id: 0, name: "Whispering Pines", timeText: "Half an hour later...", x: 18, y: 72, hazards: ["🦝 Raccoons"], hazardTypes: ["raccoons"] },
+      { id: 1, name: "Mossy Creek Bend", timeText: "One hour later...", x: 38, y: 45, hazards: ["🌧️ Frequent Rain"], hazardTypes: ["rain"] },
+      { id: 2, name: "Grizzly Ridge", timeText: "Two hours later...", x: 60, y: 65, hazards: ["🐻 Bears", "🦝 Raccoons"], hazardTypes: ["bears", "raccoons"] },
+      { id: 3, name: "Thunder Peak", timeText: "Three hours later...", x: 82, y: 30, hazards: ["🐻 Bears", "🌧️ Frequent Rain"], hazardTypes: ["bears", "rain"] }
+    ]
+  },
+  bike: {
+    name: "🚲 Touring Cycle Trail Map",
+    icon: "🚲",
+    hikes: [
+      { id: 0, name: "Redwood Gravel Loop", timeText: "One hour cycling later...", x: 20, y: 35, hazards: ["🦝 Raccoons"], hazardTypes: ["raccoons"] },
+      { id: 1, name: "Misty Valley Pass", timeText: "Two hours cycling later...", x: 45, y: 68, hazards: ["🌧️ Frequent Rain", "🦝 Raccoons"], hazardTypes: ["rain", "raccoons"] },
+      { id: 2, name: "Kodiak Overlook", timeText: "Four hours cycling later...", x: 70, y: 30, hazards: ["🐻 Bears"], hazardTypes: ["bears"] },
+      { id: 3, name: "Continental Divide Camp", timeText: "Six hours cycling later...", x: 86, y: 65, hazards: ["🐻 Bears", "🌧️ Frequent Rain"], hazardTypes: ["bears", "rain"] }
+    ]
+  },
+  car: {
+    name: "🚙 National Park Highway Map",
+    icon: "🚙",
+    hikes: [
+      { id: 0, name: "Mirror Lake Pines", timeText: "Two hours driving later...", x: 18, y: 60, hazards: ["🦝 Raccoons"], hazardTypes: ["raccoons"] },
+      { id: 1, name: "Stormy Fjord Point", timeText: "Four hours driving later...", x: 44, y: 28, hazards: ["🌧️ Frequent Rain"], hazardTypes: ["rain"] },
+      { id: 2, name: "Glacier Bear Basin", timeText: "Six hours driving later...", x: 68, y: 70, hazards: ["🐻 Bears", "🦝 Raccoons"], hazardTypes: ["bears", "raccoons"] },
+      { id: 3, name: "High Sierra Sanctuary", timeText: "Eight hours driving later...", x: 86, y: 38, hazards: ["🐻 Bears", "🌧️ Frequent Rain"], hazardTypes: ["bears", "rain"] }
+    ]
+  }
+};
+
+// Initial House Items Generator
+function createInitialHouseItems() {
+  return [
+    // Bedroom Floor items
+    { id: 'sleeping_bag', name: 'Sleeping Bag', emoji: '🛌', originRoom: 'bedroom', originZone: 'floor', x: 170, y: 495, location: 'bedroom' },
+    { id: 'tarp', name: 'Rain Tarp', emoji: '🛡️', originRoom: 'bedroom', originZone: 'floor', x: 270, y: 495, location: 'bedroom' },
+
+    // Bedroom Top Drawer (Books)
+    { id: 'book_1', name: 'Trail Guide', emoji: '📘', originRoom: 'bedroom', originZone: 'books', x: 425, y: 355, location: 'bedroom' },
+    { id: 'book_2', name: 'Star Atlas', emoji: '📗', originRoom: 'bedroom', originZone: 'books', x: 515, y: 355, location: 'bedroom' },
+
+    // Bedroom Bottom Drawer (Toys)
+    { id: 'toy_bear', name: 'Teddy Bear', emoji: '🧸', originRoom: 'bedroom', originZone: 'toys', x: 425, y: 445, location: 'bedroom' },
+    { id: 'toy_yoyo', name: 'Yo-Yo', emoji: '🪀', originRoom: 'bedroom', originZone: 'toys', x: 515, y: 445, location: 'bedroom' },
+
+    // Kitchen Counter & Shelf items
+    { id: 'matches', name: 'Matches', emoji: '🔥', originRoom: 'kitchen', originZone: 'counter', x: 145, y: 310, location: 'kitchen' },
+    { id: 'hotdog', name: 'Hot Dogs', emoji: '🌭', originRoom: 'kitchen', originZone: 'counter', x: 245, y: 310, location: 'kitchen', isFood: true, needsCooking: true, cooked: false },
+    { id: 'beans', name: 'Camp Beans', emoji: '🥫', originRoom: 'kitchen', originZone: 'counter', x: 345, y: 310, location: 'kitchen', isFood: true, needsCooking: true, cooked: false },
+    { id: 'eggs', name: 'Skillet Eggs', emoji: '🥚', originRoom: 'kitchen', originZone: 'counter', x: 445, y: 310, location: 'kitchen', isFood: true, needsCooking: true, cooked: false },
+    { id: 'apple', name: 'Crisp Apple', emoji: '🍎', originRoom: 'kitchen', originZone: 'shelf', x: 220, y: 82, location: 'kitchen', isFood: true, needsCooking: false, cooked: true },
+    { id: 'smores', name: 'Marshmallow', emoji: '🍡', originRoom: 'kitchen', originZone: 'shelf', x: 340, y: 82, location: 'kitchen', isFood: true, needsCooking: true, cooked: false },
+    { id: 'granola', name: 'Trail Mix', emoji: '🥨', originRoom: 'kitchen', originZone: 'shelf', x: 460, y: 82, location: 'kitchen', isFood: true, needsCooking: false, cooked: true }
+  ];
+}
+
+// Spawn Campfire Sticks, Logs & Rope at Campsite
+function addCampsiteItems() {
+  // Remove any leftovers from previous camp
+  state.items = state.items.filter(it => !it.isCampNative);
+
+  const campNatives = [
+    { id: 'rope', name: 'Strong Rope', emoji: '🪢', isCampNative: true, originRoom: 'camp', x: 278, y: 432, location: 'camp' },
+    { id: 'stick_1', name: 'Dry Sticks', emoji: '🌿', isCampNative: true, isFuel: true, fuelAmount: 35, originRoom: 'camp', x: 140, y: 535, location: 'camp' },
+    { id: 'stick_2', name: 'Pine Twigs', emoji: '🌿', isCampNative: true, isFuel: true, fuelAmount: 35, originRoom: 'camp', x: 310, y: 550, location: 'camp' },
+    { id: 'log_1', name: 'Oak Log', emoji: '🪵', isCampNative: true, isFuel: true, fuelAmount: 55, originRoom: 'camp', x: 600, y: 545, location: 'camp' },
+    { id: 'log_2', name: 'Birch Log', emoji: '🪵', isCampNative: true, isFuel: true, fuelAmount: 55, originRoom: 'camp', x: 750, y: 540, location: 'camp' }
+  ];
+
+  state.items.push(...campNatives);
+}
+
+/* ============================================================================
+   UI HELPERS & SCREEN NAVIGATION
+   ============================================================================ */
+function setHint(html) {
+  document.getElementById('hint-banner').innerHTML = html;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function showScreen(screenName) {
+  state.screen = screenName;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screenName).classList.add('active');
+
+  const bpPanel = document.getElementById('backpack-panel');
+  const doneBtn = document.getElementById('done-packing-btn');
+
+  if (screenName === 'house') {
+    bpPanel.classList.add('visible');
+    doneBtn.style.display = 'block';
+  } else if (screenName === 'camp') {
+    bpPanel.classList.add('visible');
+    doneBtn.style.display = 'none';
+  } else {
+    bpPanel.classList.remove('visible');
+  }
+
+  renderAllItems();
+}
+
+function playOverlayTransition(title, sub, durationMs, callback) {
+  const overlay = document.getElementById('black-overlay');
+  document.getElementById('overlay-title').textContent = title;
+  document.getElementById('overlay-sub').textContent = sub || '';
+  overlay.classList.add('active');
+
+  setTimeout(() => {
+    if (callback) callback();
+    setTimeout(() => {
+      overlay.classList.remove('active');
+    }, 450);
+  }, durationMs);
+}
+
+/* ============================================================================
+   1. OPENING SCREEN & PROGRESSION LOGIC
+   ============================================================================ */
+function updateTitleScreen() {
+  const sTrips = state.trips.shoes;
+  const bTrips = state.trips.bike;
+  const cTrips = state.trips.car;
+
+  document.getElementById('prog-shoes').textContent = `Backpacking Trips: ${sTrips} / 10`;
+
+  const bikeCard = document.getElementById('card-bike');
+  const lockBike = document.getElementById('lock-bike');
+  if (sTrips >= 10) {
+    bikeCard.classList.remove('locked');
+    lockBike.style.display = 'none';
+    document.getElementById('prog-bike').textContent = `Bike Camping Trips: ${bTrips} / 20`;
+  } else {
+    bikeCard.classList.add('locked');
+    lockBike.style.display = 'flex';
+    document.getElementById('prog-bike').textContent = `Unlock after 10 Shoe Trips (${sTrips}/10)`;
+  }
+
+  const carCard = document.getElementById('card-car');
+  const lockCar = document.getElementById('lock-car');
+  if (bTrips >= 20) {
+    carCard.classList.remove('locked');
+    lockCar.style.display = 'none';
+    document.getElementById('prog-car').textContent = `Car Camping Trips: ${cTrips}`;
+  } else {
+    carCard.classList.add('locked');
+    lockCar.style.display = 'flex';
+    document.getElementById('prog-car').textContent = `Unlock after 20 Bike Trips (${bTrips}/20)`;
+  }
+
+  document.getElementById('stats-text').textContent =
+    `🥾 Shoes: ${sTrips}/10 | 🚲 Bike: ${bTrips}/20 | 🚙 Car: ${cTrips}`;
+}
+
+function devAddTrips(mode, count) {
+  state.trips[mode] += count;
+  state.unlockedHikes[mode] = 4;
+  updateTitleScreen();
+  showToast(`Added +${count} ${mode} trips! Check the transport screen.`);
+}
+
+function selectTransport(mode) {
+  if (mode === 'bike' && state.trips.shoes < 10) {
+    showToast('🔒 Complete 10 Hiking Shoe trips first to unlock the Bike!');
+    return;
+  }
+  if (mode === 'car' && state.trips.bike < 20) {
+    showToast('🔒 Complete 20 Bike Camping trips first to unlock the Car!');
+    return;
+  }
+
+  state.transport = mode;
+  // Reset house items & backpack for a fresh trip
+  state.backpack = [[null, null, null], [null, null, null]];
+  state.items = createInitialHouseItems();
+  state.drawers = { books: false, toys: false };
+  document.getElementById('drawer-books').classList.remove('open');
+  document.getElementById('drawer-toys').classList.remove('open');
+
+  switchRoom('bedroom');
+  showScreen('house');
+  setHint('<strong>Bedroom:</strong> Drag your <strong>Sleeping Bag</strong> (and <strong>Rain Tarp</strong>) into the Backpack. Click drawers to see books & toys, or swipe to the <strong>Kitchen</strong> for food & matches!');
+}
+
+/* ============================================================================
+   2. HOUSE SCREEN (SWIPE BEDROOM <-> KITCHEN & DRAWERS)
+   ============================================================================ */
+function switchRoom(targetRoom) {
+  state.room = targetRoom;
+  const slider = document.getElementById('house-slider');
+  if (targetRoom === 'kitchen') {
+    slider.style.transform = 'translateX(-50%)';
+    setHint('<strong>Kitchen:</strong> Pack <strong>Matches</strong> (required to light campfire!) and <strong>Food</strong> into your backpack. If full, swipe back to the Bedroom to remove non-essentials.');
+  } else {
+    slider.style.transform = 'translateX(0%)';
+    setHint('<strong>Bedroom:</strong> Pack your <strong>Sleeping Bag</strong> & <strong>Rain Tarp</strong>. Drag items out of the backpack to return them (only works if you are in the room they came from!).');
+  }
+  renderAllItems();
+}
+
+function toggleDrawer(which) {
+  state.drawers[which] = !state.drawers[which];
+  const el = document.getElementById('drawer-' + which);
+  el.classList.toggle('open', state.drawers[which]);
+  renderAllItems();
+}
+
+// Swipe Gesture Detection on House Screen
+let houseSwipeStartX = null;
+const houseEl = document.getElementById('screen-house');
+houseEl.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.item') || e.target.closest('#backpack-panel') || e.target.closest('.drawer') || e.target.closest('button')) return;
+  houseSwipeStartX = e.clientX;
+});
+houseEl.addEventListener('pointerup', (e) => {
+  if (houseSwipeStartX === null) return;
+  const dx = e.clientX - houseSwipeStartX;
+  if (dx < -60 && state.room === 'bedroom') switchRoom('kitchen');
+  if (dx > 60 && state.room === 'kitchen') switchRoom('bedroom');
+  houseSwipeStartX = null;
+});
+
+document.getElementById('done-packing-btn').addEventListener('click', () => {
+  showMapScreen();
+});
+
+function returnToPacking() {
+  showScreen('house');
+}
+
+/* ============================================================================
+   3. MAP SCREEN & TRAIL SELECTION
+   ============================================================================ */
+function showMapScreen() {
+  showScreen('map');
+  const mapData = MAPS[state.transport];
+  document.getElementById('map-title').textContent = mapData.name;
+
+  const unlockedCount = state.unlockedHikes[state.transport];
+  const svg = document.getElementById('trail-svg');
+  const container = document.getElementById('trail-nodes-container');
+  svg.innerHTML = '';
+  container.innerHTML = '';
+
+  // Draw dotted trail lines only up to unlocked hikes
+  for (let i = 0; i < unlockedCount; i++) {
+    const h = mapData.hikes[i];
+    const prevX = i === 0 ? 6 : mapData.hikes[i - 1].x;
+    const prevY = i === 0 ? 88 : mapData.hikes[i - 1].y;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', prevX + '%');
+    line.setAttribute('y1', prevY + '%');
+    line.setAttribute('x2', h.x + '%');
+    line.setAttribute('y2', h.y + '%');
+    line.setAttribute('stroke', '#8b4513');
+    line.setAttribute('stroke-width', '5');
+    line.setAttribute('stroke-dasharray', '10, 10');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+
+    // Create clickable hike node
+    const node = document.createElement('div');
+    node.className = 'trail-node';
+    node.style.left = h.x + '%';
+    node.style.top = h.y + '%';
+    node.innerHTML = `
+      <div class="node-title">🏕️ ${h.name}</div>
+      <div class="node-time">⏱️ ${h.timeText.replace('...', '')}</div>
+      <div class="node-hazards">⚠️ ${h.hazards.join(' • ')}</div>
+    `;
+    node.addEventListener('click', () => startHike(h));
+    container.appendChild(node);
+  }
+
+  setHint('<strong>Trail Map:</strong> Check the hazards on the trail! Make sure you packed <strong>Sleeping Bag</strong>, <strong>Matches</strong>, <strong>Food</strong>, and a <strong>Tarp</strong> if rain is forecast. Click a hike to depart!');
+}
+
+function startHike(hike) {
+  state.currentHike = hike;
+  playOverlayTransition(hike.timeText, `Arriving at ${hike.name} (${hike.hazards.join(', ')})`, 1700, () => {
+    setupCampsite();
+  });
+}
+
+/* ============================================================================
+   4. CAMPSITE SETUP & MECHANICS
+   ============================================================================ */
+function setupCampsite() {
+  state.camp = {
+    timeOfDay: 'evening',
+    tentPitched: false,
+    sleepingBagInTent: false,
+    tarpOnTent: false,
+    ropeOnTree: false,
+    fireWood: 0,
+    fireLit: false,
+    fireLevel: 0,
+    sleptOnce: false
+  };
+
+  const campScreen = document.getElementById('screen-camp');
+  campScreen.classList.add('evening');
+
+  // Rain visual if hike has rain hazard
+  const hasRain = state.currentHike.hazardTypes.includes('rain');
+  document.getElementById('rain-fx').classList.toggle('active', hasRain);
+
+  // Reset rope zone
+  document.getElementById('hanging-rope-zone').classList.remove('active');
+
+  addCampsiteItems();
+  updateCampsiteVisuals();
+  showScreen('camp');
+  updateCampHint();
+}
+
+function updateCampsiteVisuals() {
+  const c = state.camp;
+  const unpitchedEl = document.getElementById('tent-unpitched-view');
+  const pitchedEl = document.getElementById('tent-pitched-view');
+  const tarpEl = document.getElementById('tent-tarp-visual');
+  const badgesEl = document.getElementById('tent-badges');
+
+  if (!c.tentPitched) {
+    unpitchedEl.style.display = 'flex';
+    pitchedEl.style.display = 'none';
+    badgesEl.textContent = 'Click to Pitch Tent';
+  } else {
+    unpitchedEl.style.display = 'none';
+    pitchedEl.style.display = 'block';
+    tarpEl.style.display = c.tarpOnTent ? 'flex' : 'none';
+
+    const parts = [];
+    if (c.sleepingBagInTent) parts.push('🛌 Bag Inside');
+    if (c.tarpOnTent) parts.push('🛡️ Tarp');
+    if (c.timeOfDay === 'evening') {
+      parts.push(c.sleepingBagInTent ? 'Click to Enter Tent' : 'Drag Sleeping Bag Here');
+    } else {
+      parts.push(c.sleepingBagInTent ? 'Click to Remove Sleeping Bag' : 'Click to Take Down Tent');
+    }
+    badgesEl.textContent = parts.join(' | ');
+  }
+
+  // Campfire visuals
+  const flameEl = document.getElementById('fire-flame');
+  const labelEl = document.getElementById('fire-stones-label');
+  const meterBar = document.getElementById('fire-meter-bar');
+
+  if (c.fireLit && c.fireLevel > 0) {
+    flameEl.style.display = 'block';
+    flameEl.style.transform = `scale(${0.65 + (c.fireLevel / 140)})`;
+    labelEl.textContent = c.fireLevel < 35 ? 'Fire Low! Add Wood' : 'Burning Warm';
+    meterBar.style.width = c.fireLevel + '%';
+  } else {
+    c.fireLit = false;
+    flameEl.style.display = 'none';
+    meterBar.style.width = c.fireWood > 0 ? '30%' : '0%';
+    labelEl.textContent = c.fireWood > 0 ? `Wood Ready (Drag Matches)` : `Unlit Pit (Drag Sticks)`;
+  }
+
+  // Return Home Transport Button check (Morning + tent taken down + non-native items packed)
+  const returnBtn = document.getElementById('return-home-btn');
+  const loosePlayerItems = state.items.filter(it => !it.isCampNative && (it.location === 'camp' || it.location === 'rope' || it.location === 'bearbox'));
+  const readyToGoHome = c.sleptOnce && !c.tentPitched && !c.sleepingBagInTent && !c.tarpOnTent && loosePlayerItems.length === 0;
+
+  if (readyToGoHome) {
+    document.getElementById('return-transport-emoji').textContent = MAPS[state.transport].icon;
+    returnBtn.style.display = 'flex';
+  } else {
+    returnBtn.style.display = 'none';
+  }
+}
+
+function updateCampHint() {
+  const c = state.camp;
+  const hazards = state.currentHike ? state.currentHike.hazardTypes : [];
+  const looseFood = state.items.filter(it => it.isFood && (it.location === 'camp' || it.location === 'backpack'));
+
+  if (c.timeOfDay === 'evening') {
+    if (!c.tentPitched) {
+      setHint('<strong>Campsite:</strong> Click the <strong>Rolled Tent</strong> on the ground to pitch it! Drag <strong>Sticks/Logs</strong> to the fire pit and light with <strong>Matches</strong>.');
+    } else if ((hazards.includes('raccoons') || hazards.includes('bears')) && looseFood.length > 0) {
+      setHint('💡 <strong>Critter Hazard Hint:</strong> Raccoons/Bears are nearby! Drag the <strong>Rope</strong> from the table to the <strong>Tree</strong> and drag your <strong>Food</strong> to the hanging rope (or <strong>Bear Box</strong>) before sleeping!');
+    } else if (hazards.includes('rain') && !c.tarpOnTent) {
+      setHint('💡 <strong>Rain Hazard Hint:</strong> Frequent rain is happening! Drag your <strong>Rain Tarp</strong> from the backpack onto the <strong>Tent</strong> before sleeping.');
+    } else if (!c.sleepingBagInTent) {
+      setHint('<strong>Campsite:</strong> Cook raw food over the campfire and click food to eat. When ready for bed, drag your <strong>Sleeping Bag</strong> onto the pitched <strong>Tent</strong>!');
+    } else {
+      setHint('<strong>Ready for Bed:</strong> Click on the <strong>Pitched Tent</strong> to step inside and sleep in your sleeping bag!');
+    }
+  } else {
+    // Morning hints
+    const loosePlayerItems = state.items.filter(it => !it.isCampNative && (it.location === 'camp' || it.location === 'rope' || it.location === 'bearbox'));
+    if (c.sleepingBagInTent) {
+      setHint('☀️ <strong>Good Morning!</strong> Cook & click food for breakfast if hungry. Then <strong>click the Tent</strong> to remove your sleeping bag.');
+    } else if (c.tentPitched) {
+      setHint('☀️ <strong>Morning Pack-Up:</strong> Click the <strong>Tent</strong> again to take it down, and drag all your gear back into the <strong>Backpack</strong>.');
+    } else if (loosePlayerItems.length > 0) {
+      setHint('☀️ <strong>Almost Ready:</strong> Drag all remaining items (Sleeping Bag, Tarp, Matches, left-over Food) back into your <strong>Backpack</strong>.');
+    } else {
+      setHint('🎉 <strong>All Packed!</strong> Click the pulsing <strong>Transport Icon</strong> in the bottom-right corner to head back home and unlock the next trail!');
+    }
+  }
+}
+
+// Campfire burn-down timer
+setInterval(() => {
+  if (state.screen === 'camp' && state.camp.fireLit && state.camp.fireLevel > 0) {
+    state.camp.fireLevel = Math.max(0, state.camp.fireLevel - 2);
+    if (state.camp.fireLevel === 0) {
+      state.camp.fireLit = false;
+      state.camp.fireWood = 0;
+      showToast('The campfire burned out! Drag more sticks or logs to rebuild it.');
+    }
+    updateCampsiteVisuals();
+  }
+}, 1200);
+
+// Clicking on the Tent
+function handleTentClick() {
+  const c = state.camp;
+  if (c.timeOfDay === 'evening') {
+    if (!c.tentPitched) {
+      c.tentPitched = true;
+      showToast('⛺ Tent pitched!');
+    } else {
+      // Enter tent interior view
+      if (!c.sleepingBagInTent) {
+        showToast('Drag your Sleeping Bag into the tent first so you can sleep inside!');
+        return;
+      }
+      showScreen('tent-inside');
+      setHint('<strong>Inside Tent:</strong> Click on your <strong>Sleeping Bag</strong> to sleep until morning, or click the <strong>Tent Door</strong> to go back outside.');
+      return;
+    }
+  } else {
+    // Morning: 1st click removes sleeping bag (and tarp), 2nd click takes down tent
+    if (c.sleepingBagInTent) {
+      c.sleepingBagInTent = false;
+      const bag = state.items.find(i => i.id === 'sleeping_bag');
+      if (bag) {
+        bag.location = 'camp';
+        bag.x = 580;
+        bag.y = 460;
+      }
+      showToast('🛌 Removed Sleeping Bag from tent. Drag it into your backpack!');
+    } else if (c.tentPitched) {
+      if (c.tarpOnTent) {
+        c.tarpOnTent = false;
+        const tarp = state.items.find(i => i.id === 'tarp');
+        if (tarp) {
+          tarp.location = 'camp';
+          tarp.x = 655;
+          tarp.y = 460;
+        }
+      }
+      c.tentPitched = false;
+      showToast('⛺ Tent taken down! Pack your remaining gear into the backpack.');
+    }
+  }
+  updateCampsiteVisuals();
+  updateCampHint();
+  renderAllItems();
+}
+
+function exitTentToCampsite() {
+  showScreen('camp');
+  updateCampHint();
+}
+
+function sleepInTent() {
+  const hazards = state.currentHike ? state.currentHike.hazardTypes : [];
+  let nightNotes = [];
+
+  // Check rain hazard precaution
+  if (hazards.includes('rain') && !state.camp.tarpOnTent) {
+    nightNotes.push('🌧️ Rain leaked in overnight because the tent had no Tarp!');
+  } else if (hazards.includes('rain') && state.camp.tarpOnTent) {
+    nightNotes.push('🛡️ Your Rain Tarp kept the tent bone-dry all night!');
+  }
+
+  // Check raccoon / bear hazard precaution on un-secured food
+  if (hazards.includes('raccoons') || hazards.includes('bears')) {
+    const vulnerableFood = state.items.filter(it => it.isFood && (it.location === 'camp' || it.location === 'backpack'));
+    if (vulnerableFood.length > 0) {
+      vulnerableFood.forEach(food => {
+        removeItemFromBackpack(food.id);
+        state.items = state.items.filter(i => i.id !== food.id);
+      });
+      nightNotes.push('🦝 Critters smelled unsecured food in camp/backpack and ate it overnight!');
+    } else {
+      nightNotes.push('🪢 Your food hung safely out of reach of hungry critters!');
+    }
+  }
+
+  const summary = nightNotes.length > 0 ? nightNotes.join(' ') : 'A peaceful night under the stars.';
+
+  playOverlayTransition('Next Morning', summary, 2200, () => {
+    state.camp.timeOfDay = 'morning';
+    state.camp.sleptOnce = true;
+    state.camp.fireLevel = Math.min(state.camp.fireLevel, 25);
+    document.getElementById('screen-camp').classList.remove('evening');
+    document.getElementById('rain-fx').classList.remove('active');
+    showScreen('camp');
+    updateCampsiteVisuals();
+    updateCampHint();
+  });
+}
+
+function completeTripAndGoHome() {
+  const mode = state.transport;
+  state.trips[mode]++;
+
+  // Unlock next hike on current map
+  if (state.unlockedHikes[mode] < MAPS[mode].hikes.length) {
+    state.unlockedHikes[mode]++;
+  }
+
+  updateTitleScreen();
+
+  let msg = `Trip complete! Next trail on the ${MAPS[mode].name} is now unlocked.`;
+  if (mode === 'shoes' && state.trips.shoes === 10) {
+    msg = '🎉 10 Backpacking trips completed! The Touring Bike & Cycle Map are now UNLOCKED!';
+  } else if (mode === 'bike' && state.trips.bike === 20) {
+    msg = '🎉 20 Bike Camping trips completed! The Camp Cruiser Car & Highway Map are now UNLOCKED!';
+  }
+
+  playOverlayTransition('Heading Home...', msg, 1800, () => {
+    showScreen('title');
+    setHint('Welcome back home! Choose your transport to pack for your next camping adventure.');
+  });
+}
+
+/* ============================================================================
+   BACKPACK SLOT MANAGEMENT & DRAG-AND-DROP ENGINE
+   ============================================================================ */
+function countBackpackItems() {
+  let count = 0;
+  for (let l = 0; l < 2; l++) {
+    for (let s = 0; s < 3; s++) {
+      if (state.backpack[l][s]) count++;
+    }
+  }
+  return count;
+}
+
+function addItemToBackpack(item, preferredLayer = null, preferredSlot = null) {
+  if (item.isCampNative) {
+    showToast('Leave natural sticks, logs, and camp rope at the campsite!');
+    return false;
+  }
+
+  // If already in backpack, remove old slot first
+  removeItemFromBackpack(item.id);
+
+  if (preferredLayer !== null && preferredSlot !== null && !state.backpack[preferredLayer][preferredSlot]) {
+    state.backpack[preferredLayer][preferredSlot] = item.id;
+    item.location = 'backpack';
+    return true;
+  }
+
+  // Otherwise fill Layer 1 first, then Layer 2
+  for (let l = 0; l < 2; l++) {
+    for (let s = 0; s < 3; s++) {
+      if (!state.backpack[l][s]) {
+        state.backpack[l][s] = item.id;
+        item.location = 'backpack';
+        return true;
+      }
+    }
+  }
+
+  showToast('🎒 Backpack is completely full! Remove an item first.');
+  return false;
+}
+
+function removeItemFromBackpack(itemId) {
+  for (let l = 0; l < 2; l++) {
+    for (let s = 0; s < 3; s++) {
+      if (state.backpack[l][s] === itemId) {
+        state.backpack[l][s] = null;
+      }
+    }
+  }
+}
+
+function createItemDOM(item) {
+  const el = document.createElement('div');
+  el.className = 'item';
+  el.dataset.id = item.id;
+
+  let badgeHTML = '';
+  if (item.isFood) {
+    if (item.needsCooking && !item.cooked) {
+      badgeHTML = `<span class="item-badge badge-raw">Raw</span>`;
+    } else if (item.needsCooking && item.cooked) {
+      badgeHTML = `<span class="item-badge badge-cooked">Cooked</span>`;
+    }
+  }
+
+  el.innerHTML = `
+    ${badgeHTML}
+    <div class="item-emoji">${item.emoji}</div>
+    <div class="item-name">${item.name}</div>
+  `;
+
+  attachItemPointerEvents(el, item);
+  return el;
+}
+
+function renderAllItems() {
+  // Clear all previously rendered loose items
+  document.querySelectorAll('.item').forEach(el => el.remove());
+
+  // Render Backpack Slots
+  document.getElementById('bp-count-label').textContent = `${countBackpackItems()} / 6`;
+  document.querySelectorAll('.bp-slot').forEach(slotEl => {
+    slotEl.innerHTML = '';
+    const l = parseInt(slotEl.dataset.layer, 10) - 1;
+    const s = parseInt(slotEl.dataset.slot, 10);
+    const itemId = state.backpack[l][s];
+    if (itemId) {
+      const item = state.items.find(i => i.id === itemId);
+      if (item) {
+        const dom = createItemDOM(item);
+        dom.classList.add('in-slot');
+        slotEl.appendChild(dom);
+      }
+    }
+  });
+
+  // Render Room / Campsite items
+  const bedroomEl = document.getElementById('room-bedroom');
+  const kitchenEl = document.getElementById('room-kitchen');
+  const campEl = document.getElementById('screen-camp');
+  const ropeBagEl = document.getElementById('rope-food-bag');
+  const bearBoxEl = document.getElementById('bear-box-items');
+  if (ropeBagEl) ropeBagEl.innerHTML = '';
+  if (bearBoxEl) bearBoxEl.innerHTML = '';
+
+  state.items.forEach(item => {
+    if (item.location === 'backpack') return;
+
+    if (state.screen === 'house') {
+      if (item.location === 'bedroom') {
+        // Check if inside closed drawer
+        if (item.originZone === 'books' && !state.drawers.books) return;
+        if (item.originZone === 'toys' && !state.drawers.toys) return;
+        const dom = createItemDOM(item);
+        dom.style.left = item.x + 'px';
+        dom.style.top = item.y + 'px';
+        bedroomEl.appendChild(dom);
+      } else if (item.location === 'kitchen') {
+        const dom = createItemDOM(item);
+        dom.style.left = item.x + 'px';
+        dom.style.top = item.y + 'px';
+        kitchenEl.appendChild(dom);
+      }
+    } else if (state.screen === 'camp') {
+      if (item.location === 'camp') {
+        const dom = createItemDOM(item);
+        dom.style.left = item.x + 'px';
+        dom.style.top = item.y + 'px';
+        campEl.appendChild(dom);
+      } else if (item.location === 'rope' && ropeBagEl) {
+        const dom = createItemDOM(item);
+        dom.classList.add('in-slot');
+        ropeBagEl.appendChild(dom);
+      } else if (item.location === 'bearbox' && bearBoxEl) {
+        const dom = createItemDOM(item);
+        dom.classList.add('in-slot');
+        bearBoxEl.appendChild(dom);
+      }
+    }
+  });
+
+  if (state.screen === 'camp') {
+    updateCampsiteVisuals();
+    updateCampHint();
+  }
+}
+
+/* ============================================================================
+   UNIFIED POINTER DRAG & CLICK SYSTEM
+   ============================================================================ */
+function rectsOverlap(r1, r2) {
+  return !(r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top);
+}
+
+function attachItemPointerEvents(el, item) {
+  let startX = 0, startY = 0;
+  let isDragging = false;
+  let cloneEl = null;
+
+  el.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    startX = e.clientX;
+    startY = e.clientY;
+    isDragging = false;
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (!isDragging && Math.hypot(dx, dy) > 6) {
+        isDragging = true;
+        // Create floating drag visual inside #game-container
+        const containerRect = document.getElementById('game-container').getBoundingClientRect();
+        cloneEl = el.cloneNode(true);
+        cloneEl.classList.remove('in-slot');
+        cloneEl.classList.add('dragging');
+        cloneEl.style.left = (moveEvent.clientX - containerRect.left - 31) + 'px';
+        cloneEl.style.top = (moveEvent.clientY - containerRect.top - 31) + 'px';
+        document.getElementById('game-container').appendChild(cloneEl);
+        el.style.opacity = '0.3';
+      }
+
+      if (isDragging && cloneEl) {
+        const containerRect = document.getElementById('game-container').getBoundingClientRect();
+        cloneEl.style.left = (moveEvent.clientX - containerRect.left - 31) + 'px';
+        cloneEl.style.top = (moveEvent.clientY - containerRect.top - 31) + 'px';
+      }
+    };
+
+    const onUp = (upEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+
+      if (!isDragging) {
+        // Treated as a Click!
+        handleItemClick(item);
+        return;
+      }
+
+      const dropRect = cloneEl.getBoundingClientRect();
+      cloneEl.remove();
+      el.style.opacity = '1';
+
+      handleItemDrop(item, dropRect, upEvent.clientX, upEvent.clientY);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
+function handleItemClick(item) {
+  // At campsite, clicking on food eats it!
+  if (state.screen === 'camp' && item.isFood) {
+    if (item.needsCooking && !item.cooked) {
+      showToast(`🔥 ${item.name} is raw! Drag it over the lit campfire to cook it first.`);
+      return;
+    }
+    removeItemFromBackpack(item.id);
+    state.items = state.items.filter(i => i.id !== item.id);
+    showToast(`😋 Yum! You ate the ${item.name}.`);
+    renderAllItems();
+  } else if (state.screen === 'house') {
+    showToast(`Drag ${item.name} into the Backpack in the top-right corner!`);
+  }
+}
+
+function handleItemDrop(item, dropRect, clientX, clientY) {
+  const bpPanel = document.getElementById('backpack-panel');
+  const bpRect = bpPanel.getBoundingClientRect();
+
+  // 1. Dropped onto Backpack
+  if (bpPanel.classList.contains('visible') && rectsOverlap(dropRect, bpRect)) {
+    // Check if dropped onto a specific slot
+    let targetLayer = null, targetSlot = null;
+    document.querySelectorAll('.bp-slot').forEach(slotEl => {
+      if (rectsOverlap(dropRect, slotEl.getBoundingClientRect())) {
+        targetLayer = parseInt(slotEl.dataset.layer, 10) - 1;
+        targetSlot = parseInt(slotEl.dataset.slot, 10);
+      }
+    });
+    addItemToBackpack(item, targetLayer, targetSlot);
+    renderAllItems();
+    return;
+  }
+
+  // 2. Dropped in HOUSE (Removing from backpack)
+  if (state.screen === 'house') {
+    if (item.location === 'backpack') {
+      // Must be in the same room the item came from!
+      if (item.originRoom !== state.room) {
+        showToast(`↩️ ${item.name} belongs in the ${item.originRoom.toUpperCase()}! Swipe there to unpack it.`);
+        renderAllItems(); // Snaps right back into backpack
+        return;
+      }
+      // If it came from a drawer, make sure the drawer is open so it's visible
+      if (item.originZone === 'books') {
+        state.drawers.books = true;
+        document.getElementById('drawer-books').classList.add('open');
+      } else if (item.originZone === 'toys') {
+        state.drawers.toys = true;
+        document.getElementById('drawer-toys').classList.add('open');
+      }
+      removeItemFromBackpack(item.id);
+      item.location = item.originRoom;
+      showToast(`Returned ${item.name} to its spot in the ${item.originRoom}.`);
+    }
+    renderAllItems();
+    return;
+  }
+
+  // 3. Dropped in CAMPSITE
+  if (state.screen === 'camp') {
+    const containerRect = document.getElementById('game-container').getBoundingClientRect();
+    const fireRect = document.getElementById('campfire-pit').getBoundingClientRect();
+    const tentRect = document.getElementById('camp-tent').getBoundingClientRect();
+    const treeRect = document.getElementById('camp-tree').getBoundingClientRect();
+    const ropeZone = document.getElementById('hanging-rope-zone');
+    const bearBoxRect = document.getElementById('bear-box').getBoundingClientRect();
+
+    // A) Dragging Sticks / Logs to Campfire
+    if (item.isFuel && rectsOverlap(dropRect, fireRect)) {
+      state.camp.fireWood += 1;
+      if (state.camp.fireLit) {
+        state.camp.fireLevel = Math.min(100, state.camp.fireLevel + item.fuelAmount);
+        showToast(`🪵 Added ${item.name} to boost the campfire!`);
+      } else {
+        showToast(`🌿 Stacked ${item.name} in the fire pit! Now drag Matches to light it.`);
+      }
+      state.items = state.items.filter(i => i.id !== item.id);
+      renderAllItems();
+      return;
+    }
+
+    // B) Dragging Matches to Campfire
+    if (item.id === 'matches' && rectsOverlap(dropRect, fireRect)) {
+      if (state.camp.fireWood <= 0 && !state.camp.fireLit) {
+        showToast('🌿 Drag some dry sticks or logs into the fire pit first!');
+      } else {
+        state.camp.fireLit = true;
+        state.camp.fireLevel = 100;
+        showToast('🔥 Campfire lit! Drag raw food here to cook it.');
+      }
+      renderAllItems();
+      return;
+    }
+
+    // C) Dragging Food to Lit Campfire to Cook
+    if (item.isFood && rectsOverlap(dropRect, fireRect)) {
+      if (!state.camp.fireLit || state.camp.fireLevel <= 0) {
+        showToast('🔥 Light the campfire with sticks and matches before cooking!');
+      } else if (!item.needsCooking || item.cooked) {
+        showToast(`✅ ${item.name} is already ready to eat! Click it to eat.`);
+      } else {
+        item.cooked = true;
+        removeItemFromBackpack(item.id);
+        item.location = 'camp';
+        item.x = 460;
+        item.y = 430;
+        showToast(`🍳 Sizzle! ${item.name} is now cooked! Click on it to eat.`);
+      }
+      renderAllItems();
+      return;
+    }
+
+    // D) Dragging Rope to Tree
+    if (item.id === 'rope' && rectsOverlap(dropRect, treeRect)) {
+      state.camp.ropeOnTree = true;
+      ropeZone.classList.add('active');
+      state.items = state.items.filter(i => i.id !== 'rope');
+      showToast('🪢 Rope tied to the high tree branch! Drag food onto the rope to hang it safe from critters.');
+      renderAllItems();
+      return;
+    }
+
+    // E) Dragging Food to Hanging Rope on Tree
+    if (item.isFood && state.camp.ropeOnTree && (rectsOverlap(dropRect, ropeZone.getBoundingClientRect()) || rectsOverlap(dropRect, treeRect))) {
+      removeItemFromBackpack(item.id);
+      item.location = 'rope';
+      showToast(`🪢 Hung ${item.name} high from the tree branch—safe from raccoons & bears!`);
+      renderAllItems();
+      return;
+    }
+
+    // F) Dragging Food to Bear Box
+    if (item.isFood && rectsOverlap(dropRect, bearBoxRect)) {
+      removeItemFromBackpack(item.id);
+      item.location = 'bearbox';
+      showToast(`🐻 Stored ${item.name} inside the heavy-duty Bear Box!`);
+      renderAllItems();
+      return;
+    }
+
+    // G) Dragging Sleeping Bag to Pitched Tent
+    if (item.id === 'sleeping_bag' && rectsOverlap(dropRect, tentRect)) {
+      if (!state.camp.tentPitched) {
+        showToast('⛺ Click the rolled tent to pitch it before putting your sleeping bag inside!');
+      } else {
+        removeItemFromBackpack(item.id);
+        item.location = 'in_tent';
+        state.camp.sleepingBagInTent = true;
+        showToast('🛌 Sleeping Bag placed inside the tent! Click the tent when ready to enter & sleep.');
+      }
+      renderAllItems();
+      return;
+    }
+
+    // H) Dragging Rain Tarp to Pitched Tent
+    if (item.id === 'tarp' && rectsOverlap(dropRect, tentRect)) {
+      if (!state.camp.tentPitched) {
+        showToast('⛺ Pitch the tent first before securing the Rain Tarp over it!');
+      } else {
+        removeItemFromBackpack(item.id);
+        item.location = 'on_tent';
+        state.camp.tarpOnTent = true;
+        showToast('🛡️ Waterproof Tarp fastened over the tent! You are protected from rain.');
+      }
+      renderAllItems();
+      return;
+    }
+
+    // Default: Place item on campsite ground where dropped
+    removeItemFromBackpack(item.id);
+    item.location = 'camp';
+    item.x = Math.max(20, Math.min(700, clientX - containerRect.left - 31));
+    item.y = Math.max(360, Math.min(555, clientY - containerRect.top - 31));
+    renderAllItems();
+  }
+}
+
+// Initialize title screen on load
+updateTitleScreen();
+</script>
+</body>
+</html>
