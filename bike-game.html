@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ultimate Custom Bike Adventure</title>
+  <style>
+    :root {
+      --accent: #ff6b35;
+      --accent-dark: #d94e1f;
+      --panel: rgba(255, 255, 255, 0.94);
+      --text: #1e293b;
+      --success: #16a34a;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-drag: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0f172a;
+      color: var(--text);
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+      z-index: 20;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: 3px solid #fff;
+      padding: 12px 26px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      transition: transform 0.15s, background 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn:hover {
+      background: var(--accent-dark);
+      transform: translateY(-2px) scale(1.03);
+    }
+
+    .btn-secondary {
+      background: #3b82f6;
+    }
+    .btn-secondary:hover {
+      background: #2563eb;
+    }
+
+    .btn-success {
+      background: var(--success);
+    }
+    .btn-success:hover {
+      background: #15803d;
+    }
+
+    #part-customizer-ui {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 30px;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .cycle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(760px, 90vw);
+      margin: auto 0;
+    }
+
+    .arrow-btn {
+      width: 74px;
+      height: 74px;
+      border-radius: 50%;
+      font-size: 2.2rem;
+      font-weight: 900;
+      background: #fff;
+      color: var(--text);
+      border: 4px solid var(--accent);
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s;
+    }
+
+    .arrow-btn:hover {
+      transform: scale(1.1);
+      background: #fff7ed;
+    }
+
+    .part-badge {
+      background: var(--panel);
+      padding: 14px 28px;
+      border-radius: 20px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      text-align: center;
+      border: 3px solid #e2e8f0;
+    }
+
+    .part-badge h2 {
+      margin: 0 0 4px 0;
+      font-size: 1.5rem;
+    }
+
+    .part-badge p {
+      margin: 0;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .bottom-customizer-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      align-self: center;
+      z-index: 20;
+    }
+
+    #streamer-tray {
+      background: var(--panel);
+      padding: 10px 20px;
+      border-radius: 20px;
+      border: 3px dashed var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+
+    .streamer-swatch {
+      width: 64px;
+      height: 58px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 2px solid #cbd5e1;
+      cursor: grab;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      transition: transform 0.15s;
+    }
+
+    .streamer-swatch:hover {
+      transform: scale(1.08);
+      border-color: var(--accent);
+    }
+
+    #choice-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+      padding: 20px;
+    }
+
+    .choice-card {
+      background: #fff;
+      padding: 28px 36px;
+      border-radius: 28px;
+      max-width: 880px;
+      width: 95%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+      border: 4px solid var(--accent);
+    }
+
+    .choice-card h2 {
+      font-size: 2rem;
+      margin: 0 0 20px 0;
+      color: #0f172a;
+    }
+
+    .choice-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .choice-item {
+      width: 140px;
+      padding: 16px 12px;
+      border-radius: 18px;
+      background: #f8fafc;
+      border: 3px solid #cbd5e1;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, background 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .choice-item:hover {
+      transform: translateY(-5px);
+      border-color: var(--accent);
+      background: #fff7ed;
+    }
+
+    .choice-icon {
+      font-size: 3rem;
+      line-height: 1;
+    }
+
+    .choice-label {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #334155;
+    }
+
+    #corner-item-slot {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      z-index: 35;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    #corner-item-btn {
+      background: #fff;
+      border: 4px solid var(--accent);
+      border-radius: 20px;
+      padding: 10px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      transition: transform 0.15s;
+    }
+
+    #corner-item-btn:hover {
+      transform: scale(1.07);
+    }
+
+    #corner-hint-bubble {
+      background: #fde047;
+      color: #1e293b;
+      padding: 10px 16px;
+      border-radius: 14px;
+      font-weight: 800;
+      border: 2px solid #ca8a04;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      transition: opacity 1.2s ease;
+    }
+
+    #ride-hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 25;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .hud-box {
+      background: rgba(255, 255, 255, 0.94);
+      border: 3px solid #cbd5e1;
+      padding: 12px 18px;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      font-weight: 700;
+      min-width: 250px;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 12px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      width: 0%;
+      transition: width 0.1s;
+    }
+
+    #action-banner {
+      position: absolute;
+      top: 16%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.92);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 20px;
+      border: 3px solid #fde047;
+      font-size: 1.35rem;
+      font-weight: 900;
+      text-align: center;
+      z-index: 30;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
+
+    .controls-footer {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.85);
+      color: #f8fafc;
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      z-index: 25;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- SCREEN 1: CUSTOMIZER UI OVERLAY -->
+  <div id="customizer-overlay" class="overlay">
+    <div class="top-bar">
+      <div class="part-badge interactive">
+        <h2>Customize Your Bicycle</h2>
+        <p>Click directly on the <b>Frame, Wheels, Bell, Pedals, Seat, or Handlebars</b>!</p>
+      </div>
+      <button id="btn-done-customizing" class="btn btn-success interactive">Done &#10004;</button>
+    </div>
+
+    <!-- Shown when a single bike part is popped up -->
+    <div id="part-customizer-ui" class="hidden">
+      <div></div>
+      <div class="cycle-row">
+        <button id="btn-prev-style" class="arrow-btn interactive">&#9664;</button>
+        <div class="part-badge">
+          <h2 id="focused-part-name">Frame</h2>
+          <p id="focused-style-name">Crimson Bolt</p>
+        </div>
+        <button id="btn-next-style" class="arrow-btn interactive">&#9654;</button>
+      </div>
+      <button id="btn-back-full-bike" class="btn btn-secondary interactive" style="margin-bottom: 80px;">
+        &#8592; Back to Full Bike
+      </button>
+    </div>
+
+    <!-- Bottom Streamer Drag Tray -->
+    <div class="bottom-customizer-bar interactive" id="bottom-customizer-bar">
+      <div id="streamer-tray">
+        <span style="font-weight:800; color:#334155;">Drag Streamers to Handlebars:</span>
+        <div class="streamer-swatch" data-streamer="rainbow">
+          <span style="font-size:1.4rem;">🌈</span>Rainbow
+        </div>
+        <div class="streamer-swatch" data-streamer="gold">
+          <span style="font-size:1.4rem;">✨</span>Sparkle
+        </div>
+        <div class="streamer-swatch" data-streamer="neon">
+          <span style="font-size:1.4rem;">⚡</span>Neon
+        </div>
+        <div class="streamer-swatch" data-streamer="none">
+          <span style="font-size:1.4rem;">🚫</span>Remove
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: MAP OVERLAY -->
+  <div id="map-overlay" class="overlay hidden">
+    <div class="top-bar">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <button id="btn-back-to-bike" class="btn btn-secondary interactive">&#8592; Bike Shop</button>
+        <div class="part-badge interactive" style="padding:10px 20px;">
+          <h2 style="font-size:1.3rem; margin:0;">Trail Map</h2>
+          <p style="font-size:0.85rem;">Click an unlocked green trail circle on the map to start!</p>
+        </div>
+      </div>
+
+      <!-- Practice Button in Top Right with Arrow -->
+      <button id="btn-practice-route" class="btn interactive" style="background:#8b5cf6;">
+        Practice <span style="font-size:1.4rem;">&#10145;</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: CHOICE MODAL -->
+  <div id="choice-modal" class="hidden interactive">
+    <div class="choice-card">
+      <h2 id="choice-modal-title">time to pick a swimsuit!</h2>
+      <div id="choice-modal-grid" class="choice-grid"></div>
+    </div>
+  </div>
+
+  <!-- CORNER ITEM SLOT (Parachute / Water Bottle) -->
+  <div id="corner-item-slot" class="hidden interactive">
+    <button id="corner-item-btn">
+      <span id="corner-item-icon" style="font-size:1.8rem;">🪂</span>
+      <span id="corner-item-label">Parachute</span>
+    </button>
+    <div id="corner-hint-bubble" class="hidden">click on your water bottle to get a drink</div>
+  </div>
+
+  <!-- RIDE HUD -->
+  <div id="ride-hud" class="hidden">
+    <div class="hud-box">
+      <div id="hud-route-name" style="font-size:1.1rem; color:#0f172a;">Route Name</div>
+      <div id="hud-distance" style="font-size:0.95rem; color:#475569; margin-top:4px;">0 m / 1,000 m</div>
+      <div id="hud-extra" style="font-size:0.9rem; color:#d94e1f; margin-top:2px;"></div>
+      <div class="progress-bar-bg">
+        <div id="hud-progress-fill" class="progress-bar-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION BANNER -->
+  <div id="action-banner" class="hidden"></div>
+
+  <!-- FOOTER CONTROLS -->
+  <div id="controls-footer" class="controls-footer hidden">
+    Controls: <b>&#9664; / &#9654;</b> Turn Bike &nbsp;|&nbsp; <b>&#9650; Up Arrow</b> Jump &nbsp;|&nbsp; <b>&#9660; Down Arrow</b> Go Backwards &nbsp;|&nbsp; <b>Middle Click</b> (or N) Pinch Nose
+  </div>
+</div>
+
+<script>
+(() => {
+  // Polyfill for ctx.roundRect on older browsers
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+      const radius = typeof r === 'number' ? r : 8;
+      this.moveTo(x + radius, y);
+      this.arcTo(x + w, y, x + w, y + h, radius);
+      this.arcTo(x + w, y + h, x, y + h, radius);
+      this.arcTo(x, y + h, x, y, radius);
+      this.arcTo(x, y, x + w, y, radius);
+      this.closePath();
+      return this;
+    };
+  }
+
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // =========================================================================
+  // 1. GAME STATE & CUSTOMIZATION DATA
+  // =========================================================================
+  const PART_OPTIONS = {
+    frame: [
+      { name: 'Crimson Bolt', color: '#ef4444', pattern: 'solid', accent: '#fca5a5' },
+      { name: 'Ocean Tiger Stripes', color: '#0284c7', pattern: 'stripes', accent: '#38bdf8' },
+      { name: 'Emerald Polka Dots', color: '#16a34a', pattern: 'dots', accent: '#fde047' },
+      { name: 'Solar Flame', color: '#f97316', pattern: 'flames', accent: '#fef08a' },
+      { name: 'Galaxy Violet Stars', color: '#7c3aed', pattern: 'stars', accent: '#f472b6' },
+      { name: 'Cyber Gold', color: '#eab308', pattern: 'stripes', accent: '#1e293b' }
+    ],
+    wheels: [
+      { name: 'Classic Black Tires', tire: '#1e293b', rim: '#cbd5e1', spokes: '#94a3b8', bouncy: false },
+      { name: 'Whitewall Cruisers', tire: '#334155', rim: '#f8fafc', spokes: '#eab308', bouncy: false },
+      { name: 'Neon Cyan Spinners', tire: '#0f172a', rim: '#06b6d4', spokes: '#22d3ee', bouncy: false },
+      { name: 'Hot Pink Flyers', tire: '#3b0764', rim: '#ec4899', spokes: '#fbcfe8', bouncy: false },
+      { name: 'Lime Off-Roaders', tire: '#14532d', rim: '#84cc16', spokes: '#bef264', bouncy: false }
+    ],
+    bell: [
+      { name: 'Brass Dome Bell', color: '#eab308' },
+      { name: 'Silver Ring Bell', color: '#cbd5e1' },
+      { name: 'Ruby Star Bell', color: '#ef4444' },
+      { name: 'Cobalt Chime', color: '#3b82f6' },
+      { name: 'Emerald Horn', color: '#10b981' }
+    ],
+    pedals: [
+      { name: 'Steel Grip Pedals', color: '#64748b' },
+      { name: 'Fire Red Pedals', color: '#ef4444' },
+      { name: 'Sunshine Yellow Pedals', color: '#facc15' },
+      { name: 'Electric Blue Pedals', color: '#3b82f6' },
+      { name: 'Neon Green Pedals', color: '#22c55e' }
+    ],
+    seat: [
+      { name: 'Leather Brown Saddle', color: '#78350f', rim: '#92400e' },
+      { name: 'Racing Black Saddle', color: '#1e293b', rim: '#475569' },
+      { name: 'Cloud White Cruiser', color: '#f8fafc', rim: '#cbd5e1' },
+      { name: 'Royal Purple Gel', color: '#9333ea', rim: '#d8b4fe' },
+      { name: 'Cheetah Gold Saddle', color: '#ca8a04', rim: '#fef08a' }
+    ],
+    handlebars: [
+      { name: 'Chrome Swept Bars', color: '#94a3b8', grip: '#1e293b', shape: 'swept' },
+      { name: 'BMX High Risers', color: '#0f172a', grip: '#ef4444', shape: 'bmx' },
+      { name: 'Golden Bullhorns', color: '#eab308', grip: '#1d4ed8', shape: 'bullhorn' },
+      { name: 'Neon Drop Bars', color: '#10b981', grip: '#f43f5e', shape: 'drop' },
+      { name: 'Candy Pink Cruisers', color: '#ec4899', grip: '#fde047', shape: 'swept' }
+    ]
+  };
+
+  const BOUNCY_WHEEL_CHOICES = [
+    { name: 'Spring-Coil Wheels', icon: '🌀', tire: '#ef4444', rim: '#fde047', spokes: '#ffffff', bouncy: true },
+    { name: 'Slime Bounce Tires', icon: '🟢', tire: '#22c55e', rim: '#86efac', spokes: '#15803d', bouncy: true },
+    { name: 'Bubblegum Hoppers', icon: '🩷', tire: '#ec4899', rim: '#fbcfe8', spokes: '#be185d', bouncy: true },
+    { name: 'Trampoline Mesh', icon: '🔵', tire: '#3b82f6', rim: '#93c5fd', spokes: '#1d4ed8', bouncy: true },
+    { name: 'Marshmallow Puffs', icon: '⚪', tire: '#f8fafc', rim: '#38bdf8', spokes: '#0284c7', bouncy: true }
+  ];
+
+  const ROUTES = [
+    {
+      id: 'practice',
+      name: 'Practice Loop',
+      subtitle: '~0.5 km Warmup Loop',
+      totalMeters: 500,
+      scaleFactor: 22,
+      mapX: 0.85,
+      mapY: 0.18
+    },
+    {
+      id: 'hill_lake',
+      index: 0,
+      name: '1. Hill & Lake Trail',
+      subtitle: '~1 km Over the Hill & Around the Lake',
+      totalMeters: 1000,
+      scaleFactor: 28,
+      mapX: 0.16,
+      mapY: 0.72
+    },
+    {
+      id: 'underwater',
+      index: 1,
+      name: '2. Underwater Lake Dive',
+      subtitle: '~1 Mile Past Crabs, Octopus Nest & Shark',
+      totalMeters: 1609,
+      scaleFactor: 35,
+      mapX: 0.32,
+      mapY: 0.52
+    },
+    {
+      id: 'sky',
+      index: 2,
+      name: '3. Sky Loop-de-Loop',
+      subtitle: 'High Altitude Bird Loops & Parachute Drop',
+      totalMeters: 1400,
+      scaleFactor: 32,
+      mapX: 0.48,
+      mapY: 0.28
+    },
+    {
+      id: 'space',
+      index: 3,
+      name: '4. Deep Space Odyssey',
+      subtitle: '~5 Miles: Moon, Mars & Back to Earth',
+      totalMeters: 8046,
+      scaleFactor: 145,
+      mapX: 0.66,
+      mapY: 0.22
+    },
+    {
+      id: 'track',
+      index: 4,
+      name: '5. Hurdle Running Track',
+      subtitle: '5 Laps • Hurdle Every 50 Meters',
+      totalMeters: 1000,
+      scaleFactor: 24,
+      mapX: 0.72,
+      mapY: 0.58
+    },
+    {
+      id: 'stables',
+      index: 5,
+      name: '6. Horse Stables Zig-Zag',
+      subtitle: '~1 Mile: Pasture, Stalls, Poop Pile & Arena',
+      totalMeters: 1609,
+      scaleFactor: 35,
+      mapX: 0.86,
+      mapY: 0.75
+    }
+  ];
+
+  const state = {
+    screen: 'CUSTOMIZER',
+    focusedPart: null,
+    hasClickedFrameOnce: false,
+    hoveredPart: null,
+    unlockedRouteIndex: 0,
+
+    bike: {
+      frame: 0,
+      wheels: 0,
+      bell: 0,
+      pedals: 0,
+      seat: 0,
+      handlebars: 0,
+      streamers: 'none',
+      tempBouncyWheel: null
+    },
+
+    draggingStreamer: null,
+    mouseX: 0,
+    mouseY: 0,
+    bellRingTimer: 0,
+
+    activeRoute: null,
+    ridePhase: 'PRE_CHOICE',
+    suitChoice: null,
+    cornerItem: null,
+
+    helmetPos: { x: 250, y: 420 },
+    draggingHelmet: false,
+    helmetEquipped: false,
+
+    selectedTowel: null,
+    towelPos: { x: 260, y: 400 },
+    draggingTowel: false,
+    dryProgress: 0,
+
+    distanceMeters: 0,
+    speed: 0,
+    lateralOffset: 0,
+    bikeAngle: 0,
+    jumpY: 0,
+    jumpVy: 0,
+    isGrounded: true,
+    pedalAngle: 0,
+    hitCooldown: 0,
+
+    freefallTimer: 30.0,
+    parachuteDeployed: false,
+    freefallAltitude: 1000,
+
+    nosePinched: false,
+    nosePinchTimer: 0,
+
+    obstacles: []
+  };
+
+  const keys = {
+    ArrowLeft: false,
+    ArrowRight: false,
+    ArrowUp: false,
+    ArrowDown: false
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (Object.prototype.hasOwnProperty.call(keys, e.key)) {
+      keys[e.key] = true;
+      e.preventDefault();
+    }
+    if ((e.key === 'n' || e.key === 'N') && state.screen === 'RIDE' && state.activeRoute && state.activeRoute.id === 'stables') {
+      triggerPinchNose();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (Object.prototype.hasOwnProperty.call(keys, e.key)) {
+      keys[e.key] = false;
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('auxclick', (e) => {
+    if (e.button === 1 && state.screen === 'RIDE' && state.activeRoute && state.activeRoute.id === 'stables') {
+      e.preventDefault();
+      triggerPinchNose();
+    }
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 1 && state.screen === 'RIDE' && state.activeRoute && state.activeRoute.id === 'stables') {
+      e.preventDefault();
+      triggerPinchNose();
+    }
+  });
+
+  function triggerPinchNose() {
+    state.nosePinched = true;
+    state.nosePinchTimer = 4.0;
+    showBanner('👃 Nose Pinched! Phew, bypassed the smelly poop pile!', 2500);
+  }
+
+  // =========================================================================
+  // 2. UI NAVIGATION & BUTTON HANDLERS
+  // =========================================================================
+  const customizerOverlay = document.getElementById('customizer-overlay');
+  const partCustomizerUI = document.getElementById('part-customizer-ui');
+  const bottomCustomizerBar = document.getElementById('bottom-customizer-bar');
+  const mapOverlay = document.getElementById('map-overlay');
+  const choiceModal = document.getElementById('choice-modal');
+  const cornerItemSlot = document.getElementById('corner-item-slot');
+  const cornerItemBtn = document.getElementById('corner-item-btn');
+  const cornerHintBubble = document.getElementById('corner-hint-bubble');
+  const rideHud = document.getElementById('ride-hud');
+  const actionBanner = document.getElementById('action-banner');
+  const controlsFooter = document.getElementById('controls-footer');
+
+  let bannerTimeout = null;
+  function showBanner(text, duration = 0) {
+    actionBanner.textContent = text;
+    actionBanner.classList.remove('hidden');
+    if (bannerTimeout) clearTimeout(bannerTimeout);
+    if (duration > 0) {
+      bannerTimeout = setTimeout(() => {
+        actionBanner.classList.add('hidden');
+      }, duration);
+    }
+  }
+
+  function hideBanner() {
+    actionBanner.classList.add('hidden');
+  }
+
+  function switchScreen(newScreen) {
+    state.screen = newScreen;
+    customizerOverlay.classList.toggle('hidden', newScreen !== 'CUSTOMIZER');
+    mapOverlay.classList.toggle('hidden', newScreen !== 'MAP');
+    rideHud.classList.toggle('hidden', newScreen !== 'RIDE');
+    controlsFooter.classList.toggle('hidden', newScreen !== 'RIDE');
+
+    if (newScreen !== 'RIDE') {
+      choiceModal.classList.add('hidden');
+      cornerItemSlot.classList.add('hidden');
+      hideBanner();
+    }
+    if (newScreen === 'CUSTOMIZER') {
+      state.bike.tempBouncyWheel = null;
+      exitPartFocus();
+    }
+  }
+
+  function focusPart(partKey) {
+    state.focusedPart = partKey;
+    if (partKey === 'frame') state.hasClickedFrameOnce = true;
+    if (partKey === 'bell') state.bellRingTimer = 1.0;
+    partCustomizerUI.classList.remove('hidden');
+    bottomCustomizerBar.classList.add('hidden');
+    updateFocusedPartText();
+  }
+
+  function exitPartFocus() {
+    state.focusedPart = null;
+    partCustomizerUI.classList.add('hidden');
+    bottomCustomizerBar.classList.remove('hidden');
+  }
+
+  function updateFocusedPartText() {
+    const part = state.focusedPart;
+    if (!part) return;
+    const list = PART_OPTIONS[part];
+    const currentIdx = state.bike[part];
+    document.getElementById('focused-part-name').textContent =
+      part.charAt(0).toUpperCase() + part.slice(1);
+    document.getElementById('focused-style-name').textContent = list[currentIdx].name;
+  }
+
+  document.getElementById('btn-prev-style').addEventListener('click', () => {
+    const part = state.focusedPart;
+    if (!part) return;
+    const len = PART_OPTIONS[part].length;
+    state.bike[part] = (state.bike[part] - 1 + len) % len;
+    if (part === 'bell') state.bellRingTimer = 0.8;
+    updateFocusedPartText();
+  });
+
+  document.getElementById('btn-next-style').addEventListener('click', () => {
+    const part = state.focusedPart;
+    if (!part) return;
+    const len = PART_OPTIONS[part].length;
+    state.bike[part] = (state.bike[part] + 1) % len;
+    if (part === 'bell') state.bellRingTimer = 0.8;
+    updateFocusedPartText();
+  });
+
+  document.getElementById('btn-back-full-bike').addEventListener('click', exitPartFocus);
+
+  document.getElementById('btn-done-customizing').addEventListener('click', () => {
+    switchScreen('MAP');
+  });
+
+  document.getElementById('btn-back-to-bike').addEventListener('click', () => {
+    switchScreen('CUSTOMIZER');
+  });
+
+  document.getElementById('btn-practice-route').addEventListener('click', () => {
+    startRoute(ROUTES[0]);
+  });
+
+  document.querySelectorAll('.streamer-swatch').forEach(el => {
+    el.addEventListener('mousedown', (e) => {
+      const type = el.getAttribute('data-streamer');
+      if (type === 'none') {
+        state.bike.streamers = 'none';
+        return;
+      }
+      state.draggingStreamer = type;
+      state.mouseX = e.clientX;
+      state.mouseY = e.clientY;
+    });
+  });
+
+  cornerItemBtn.addEventListener('click', () => {
+    if (!state.activeRoute) return;
+    if (state.activeRoute.id === 'sky') {
+      if (state.ridePhase === 'FREEFALL' && !state.parachuteDeployed) {
+        state.parachuteDeployed = true;
+        showBanner('🪂 Parachute Deployed! Floating safely to the finish line...');
+      } else if (state.ridePhase === 'RIDING') {
+        showBanner('Wait until you fly off the edge of the sky track to deploy!', 2000);
+      }
+    } else if (state.activeRoute.id === 'stables') {
+      showBanner('💧 Gulp, gulp! Refreshing drink of water!', 1800);
+    }
+  });
+
+  // =========================================================================
+  // 3. STARTING A ROUTE & PRE-RIDE SEQUENCES
+  // =========================================================================
+  function startRoute(route) {
+    state.activeRoute = route;
+    state.distanceMeters = 0;
+    state.speed = 0;
+    state.lateralOffset = 0;
+    state.bikeAngle = 0;
+    state.jumpY = 0;
+    state.jumpVy = 0;
+    state.isGrounded = true;
+    state.helmetEquipped = false;
+    state.draggingHelmet = false;
+    state.helmetPos = { x: canvas.width * 0.25, y: canvas.height * 0.62 };
+    state.suitChoice = null;
+    state.cornerItem = null;
+    state.selectedTowel = null;
+    state.draggingTowel = false;
+    state.dryProgress = 0;
+    state.parachuteDeployed = false;
+    state.freefallTimer = 30.0;
+    state.freefallAltitude = 1000;
+    state.nosePinched = false;
+    state.nosePinchTimer = 0;
+    state.bike.tempBouncyWheel = null;
+
+    generateObstaclesForRoute(route);
+    switchScreen('RIDE');
+
+    if (route.id === 'underwater') {
+      openChoiceModal('time to pick a swimsuit!', [
+        { name: 'Classic Scuba', icon: '🤿', color: '#0284c7' },
+        { name: 'Neon Wetsuit', icon: '🏄', color: '#10b981' },
+        { name: 'Deep Sea Brass', icon: '🧑‍🚀', color: '#eab308' },
+        { name: 'Coral Stripes', icon: '🩱', color: '#ec4899' },
+        { name: 'Shark Fin Suit', icon: '🦈', color: '#64748b' }
+      ], (item) => {
+        state.suitChoice = item;
+        beginHelmetStep();
+      });
+    } else if (route.id === 'sky') {
+      openChoiceModal('pick a parachute', [
+        { name: 'Rainbow Canopy', icon: '🪂', color: '#ef4444' },
+        { name: 'Cloud Glider', icon: '☁️', color: '#38bdf8' },
+        { name: 'Golden Eagle', icon: '🦅', color: '#eab308' },
+        { name: 'Starlight Chute', icon: '✨', color: '#a855f7' },
+        { name: 'Emerald Wing', icon: '🍀', color: '#22c55e' }
+      ], (item) => {
+        state.cornerItem = item;
+        setupCornerItem(item.icon, item.name, null);
+        beginHelmetStep();
+      });
+    } else if (route.id === 'space') {
+      openChoiceModal('time to choose a space suit!', [
+        { name: 'Apollo White', icon: '👨‍🚀', color: '#f8fafc' },
+        { name: 'Mars Commander', icon: '🔴', color: '#ef4444' },
+        { name: 'Nebula Gold', icon: '🌟', color: '#eab308' },
+        { name: 'Astro Cobalt', icon: '🛰️', color: '#3b82f6' },
+        { name: 'Alien Emerald', icon: '👽', color: '#10b981' }
+      ], (item) => {
+        state.suitChoice = item;
+        beginHelmetStep();
+      });
+    } else if (route.id === 'track') {
+      openChoiceModal('pick some bouncy wheels, we’re going to be jumping!', BOUNCY_WHEEL_CHOICES, (item) => {
+        state.bike.tempBouncyWheel = item;
+        beginHelmetStep();
+      });
+    } else if (route.id === 'stables') {
+      openChoiceModal('pick a water bottle', [
+        { name: 'Hydro Blue', icon: '🧴', color: '#38bdf8' },
+        { name: 'Berry Blast', icon: '🥤', color: '#ec4899' },
+        { name: 'Steel Flask', icon: '🍶', color: '#94a3b8' },
+        { name: 'Lime Sport', icon: '🧪', color: '#84cc16' },
+        { name: 'Golden Sipper', icon: '🏆', color: '#eab308' }
+      ], (item) => {
+        state.cornerItem = item;
+        setupCornerItem(item.icon, item.name, 'click on your water bottle to get a drink');
+        beginHelmetStep();
+      });
+    } else {
+      beginHelmetStep();
+    }
+  }
+
+  function openChoiceModal(titleText, items, onSelect) {
+    state.ridePhase = 'PRE_CHOICE';
+    document.getElementById('choice-modal-title').textContent = titleText;
+    const grid = document.getElementById('choice-modal-grid');
+    grid.innerHTML = '';
+    items.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'choice-item';
+      card.innerHTML = `
+        <div class="choice-icon">${item.icon}</div>
+        <div class="choice-label">${item.name}</div>
+      `;
+      card.addEventListener('click', () => {
+        choiceModal.classList.add('hidden');
+        onSelect(item);
+      });
+      grid.appendChild(card);
+    });
+    choiceModal.classList.remove('hidden');
+  }
+
+  let hintFadeTimeout = null;
+  function setupCornerItem(icon, label, temporaryHintText) {
+    document.getElementById('corner-item-icon').textContent = icon;
+    document.getElementById('corner-item-label').textContent = label;
+    cornerItemSlot.classList.remove('hidden');
+
+    if (hintFadeTimeout) clearTimeout(hintFadeTimeout);
+    if (temporaryHintText) {
+      cornerHintBubble.textContent = temporaryHintText;
+      cornerHintBubble.style.opacity = '1';
+      cornerHintBubble.classList.remove('hidden');
+      hintFadeTimeout = setTimeout(() => {
+        cornerHintBubble.style.opacity = '0';
+        setTimeout(() => cornerHintBubble.classList.add('hidden'), 1200);
+      }, 10000);
+    } else {
+      cornerHintBubble.classList.add('hidden');
+    }
+  }
+
+  function beginHelmetStep() {
+    state.ridePhase = 'HELMET_DRAG';
+    state.helmetPos = { x: canvas.width * 0.25, y: canvas.height * 0.65 };
+    showBanner('🪖 Drag the helmet onto your head to get ready!');
+  }
+
+  function generateObstaclesForRoute(route) {
+    state.obstacles = [];
+    if (route.id === 'underwater') {
+      for (let m = 180; m < 1450; m += 160) {
+        if (Math.abs(m - 750) < 100 || Math.abs(m - 1250) < 120) continue;
+        state.obstacles.push({
+          meters: m,
+          lane: (Math.random() * 1.4) - 0.7,
+          type: 'crab',
+          label: '🦀 Crab'
+        });
+      }
+      state.obstacles.push({ meters: 750, lane: 0.25, type: 'octopus', label: '🐙 Octopus Nest' });
+      state.obstacles.push({ meters: 1250, lane: -0.2, type: 'shark', label: '🦈 Hungry Shark!' });
+    } else if (route.id === 'sky') {
+      for (let m = 200; m < 1300; m += 150) {
+        state.obstacles.push({
+          meters: m,
+          lane: Math.sin(m * 0.03) * 0.55,
+          type: 'bird',
+          high: (m % 300 === 0),
+          label: '🦅 Sky Bird'
+        });
+      }
+    } else if (route.id === 'track') {
+      for (let m = 50; m < route.totalMeters; m += 50) {
+        state.obstacles.push({
+          meters: m,
+          lane: 0,
+          type: 'hurdle',
+          label: '🚧 Hurdle'
+        });
+      }
+    } else if (route.id === 'stables') {
+      for (let m = 220; m < 1450; m += 180) {
+        if (Math.abs(m - 950) < 130) continue;
+        state.obstacles.push({
+          meters: m,
+          lane: ((m / 180) % 2 === 0) ? -0.45 : 0.45,
+          type: 'stall',
+          label: '🐴 Horse Stall'
+        });
+      }
+      state.obstacles.push({
+        meters: 950,
+        lane: 0.0,
+        type: 'poop',
+        label: '💩 Giant Poop Pile'
+      });
+    }
+  }
+
+  function finishRouteSuccess() {
+    const route = state.activeRoute;
+    if (route && typeof route.index === 'number') {
+      if (state.unlockedRouteIndex <= route.index && route.index < 5) {
+        state.unlockedRouteIndex = route.index + 1;
+      }
+    }
+    switchScreen('CUSTOMIZER');
+  }
+
+  // =========================================================================
+  // 4. CANVAS HITBOXES, MOUSE & DRAG INTERACTIONS
+  // =========================================================================
+  function getBikeCenterOnCustomizer() {
+    return {
+      x: canvas.width * 0.5,
+      y: canvas.height * 0.54,
+      scale: Math.min(canvas.width, canvas.height) / 500
+    };
+  }
+
+  function getPartHitboxes(cx, cy, s) {
+    return {
+      bell:        { x: cx + 72 * s,  y: cy - 105 * s, r: 32 * s },
+      handlebars:  { x: cx + 45 * s,  y: cy - 95 * s,  r: 42 * s },
+      seat:        { x: cx - 58 * s,  y: cy - 86 * s,  r: 42 * s },
+      pedals:      { x: cx - 12 * s,  y: cy + 28 * s,  r: 38 * s },
+      wheelsLeft:  { x: cx - 115 * s, y: cy + 28 * s,  r: 64 * s },
+      wheelsRight: { x: cx + 115 * s, y: cy + 28 * s,  r: 64 * s },
+      frame:       { x: cx + 5 * s,   y: cy - 28 * s,  r: 72 * s }
+    };
+  }
+
+  function detectHoveredPart(mx, my) {
+    const { x: cx, y: cy, scale: s } = getBikeCenterOnCustomizer();
+    const boxes = getPartHitboxes(cx, cy, s);
+    if (Math.hypot(mx - boxes.bell.x, my - boxes.bell.y) < boxes.bell.r) return 'bell';
+    if (Math.hypot(mx - boxes.handlebars.x, my - boxes.handlebars.y) < boxes.handlebars.r) return 'handlebars';
+    if (Math.hypot(mx - boxes.seat.x, my - boxes.seat.y) < boxes.seat.r) return 'seat';
+    if (Math.hypot(mx - boxes.pedals.x, my - boxes.pedals.y) < boxes.pedals.r) return 'pedals';
+    if (
+      Math.hypot(mx - boxes.wheelsLeft.x, my - boxes.wheelsLeft.y) < boxes.wheelsLeft.r ||
+      Math.hypot(mx - boxes.wheelsRight.x, my - boxes.wheelsRight.y) < boxes.wheelsRight.r
+    ) return 'wheels';
+    if (Math.hypot(mx - boxes.frame.x, my - boxes.frame.y) < boxes.frame.r) return 'frame';
+    return null;
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    state.mouseX = mx;
+    state.mouseY = my;
+
+    if (state.screen === 'CUSTOMIZER' && !state.focusedPart) {
+      const part = detectHoveredPart(mx, my);
+      if (part) {
+        focusPart(part);
+      }
+    } else if (state.screen === 'MAP') {
+      for (let i = 1; i < ROUTES.length; i++) {
+        const r = ROUTES[i];
+        const nx = r.mapX * canvas.width;
+        const ny = r.mapY * canvas.height;
+        if (Math.hypot(mx - nx, my - ny) < 44) {
+          if (r.index <= state.unlockedRouteIndex) {
+            startRoute(r);
+          }
+          break;
+        }
+      }
+    } else if (state.screen === 'RIDE') {
+      if (state.ridePhase === 'HELMET_DRAG') {
+        if (Math.hypot(mx - state.helmetPos.x, my - state.helmetPos.y) < 60) {
+          state.draggingHelmet = true;
+        }
+      } else if (state.ridePhase === 'CLICK_BIKE') {
+        const bikeX = canvas.width * 0.56;
+        const bikeY = canvas.height * 0.65;
+        if (Math.hypot(mx - bikeX, my - bikeY) < 140) {
+          state.ridePhase = 'RIDING';
+          state.speed = 6.5;
+          hideBanner();
+        }
+      } else if (state.ridePhase === 'FREEFALL') {
+        const chutePromptX = canvas.width * 0.5;
+        const chutePromptY = canvas.height * 0.45;
+        if (Math.hypot(mx - chutePromptX, my - chutePromptY) < 180) {
+          state.parachuteDeployed = true;
+          showBanner('🪂 Parachute Deployed! Floating safely to the finish line...');
+        }
+      } else if (state.ridePhase === 'TOWEL_DRY' && state.selectedTowel) {
+        if (Math.hypot(mx - state.towelPos.x, my - state.towelPos.y) < 75) {
+          state.draggingTowel = true;
+        }
+      }
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    state.mouseX = mx;
+    state.mouseY = my;
+
+    if (state.screen === 'CUSTOMIZER' && !state.focusedPart) {
+      state.hoveredPart = detectHoveredPart(mx, my);
+      canvas.style.cursor = state.hoveredPart ? 'pointer' : 'default';
+    } else if (state.screen === 'MAP') {
+      let overNode = false;
+      for (let i = 1; i < ROUTES.length; i++) {
+        const r = ROUTES[i];
+        if (r.index <= state.unlockedRouteIndex) {
+          const nx = r.mapX * canvas.width;
+          const ny = r.mapY * canvas.height;
+          if (Math.hypot(mx - nx, my - ny) < 44) overNode = true;
+        }
+      }
+      canvas.style.cursor = overNode ? 'pointer' : 'default';
+    } else {
+      canvas.style.cursor = 'default';
+    }
+
+    if (state.draggingHelmet && state.ridePhase === 'HELMET_DRAG') {
+      state.helmetPos.x = mx;
+      state.helmetPos.y = my;
+      const headX = canvas.width * 0.42;
+      const headY = canvas.height * 0.47;
+      if (Math.hypot(mx - headX, my - headY) < 65) {
+        state.draggingHelmet = false;
+        state.helmetEquipped = true;
+        state.ridePhase = 'CLICK_BIKE';
+        showBanner('🚲 Helmet on! Now click on the bike to start biking!');
+      }
+    }
+
+    if (state.draggingTowel && state.ridePhase === 'TOWEL_DRY') {
+      state.towelPos.x = mx;
+      state.towelPos.y = my;
+      const riderX = canvas.width * 0.5;
+      const riderY = canvas.height * 0.56;
+      if (Math.hypot(mx - riderX, my - riderY) < 115) {
+        state.dryProgress += 2.0;
+        if (state.dryProgress >= 100) {
+          state.draggingTowel = false;
+          showBanner('✨ All dry and cozy! Sky Route Unlocked!', 2000);
+          setTimeout(() => finishRouteSuccess(), 1400);
+        }
+      }
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (state.draggingStreamer) {
+      const { x: cx, y: cy, scale: s } = getBikeCenterOnCustomizer();
+      const hb = getPartHitboxes(cx, cy, s).handlebars;
+      if (Math.hypot(state.mouseX - hb.x, state.mouseY - hb.y) < hb.r * 2.2) {
+        state.bike.streamers = state.draggingStreamer;
+      }
+      state.draggingStreamer = null;
+    }
+    state.draggingHelmet = false;
+    state.draggingTowel = false;
+  });
+
+  // =========================================================================
+  // 5. DRAWING THE CUSTOMIZABLE BICYCLE
+  // =========================================================================
+  function drawWheel(x, y, radius, wheelStyle, rotationAngle) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotationAngle);
+
+    if (wheelStyle.bouncy) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const bx = Math.cos(a) * (radius + 6);
+        const by = Math.sin(a) * (radius + 6);
+        ctx.fillStyle = wheelStyle.rim;
+        ctx.beginPath();
+        ctx.arc(bx, by, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.strokeStyle = wheelStyle.tire;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = wheelStyle.rim;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = wheelStyle.spokes;
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * (radius - 8), Math.sin(a) * (radius - 8));
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = wheelStyle.rim;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawStreamers(x, y, streamerType, time) {
+    if (!streamerType || streamerType === 'none') return;
+    const colors =
+      streamerType === 'rainbow' ? ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'] :
+      streamerType === 'gold'    ? ['#fef08a', '#facc15', '#eab308', '#ca8a04', '#fef08a'] :
+                                   ['#06b6d4', '#ec4899', '#a3e635', '#22d3ee', '#f43f5e'];
+
+    ctx.save();
+    ctx.translate(x, y);
+    colors.forEach((col, i) => {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      const wave1 = Math.sin(time * 6 + i) * 12;
+      const wave2 = Math.cos(time * 5 + i) * 18;
+      ctx.bezierCurveTo(-22, 15 + i * 3 + wave1, -48, 22 + i * 4 + wave2, -72, 34 + i * 5 + wave1);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function drawBike(cx, cy, scale, onlyPart = null, time = 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+
+    const frameStyle = PART_OPTIONS.frame[state.bike.frame];
+    const wheelStyle = state.bike.tempBouncyWheel || PART_OPTIONS.wheels[state.bike.wheels];
+    const bellStyle  = PART_OPTIONS.bell[state.bike.bell];
+    const pedalStyle = PART_OPTIONS.pedals[state.bike.pedals];
+    const seatStyle  = PART_OPTIONS.seat[state.bike.seat];
+    const barStyle   = PART_OPTIONS.handlebars[state.bike.handlebars];
+
+    const rearW = { x: -115, y: 28 };
+    const frontW = { x: 115, y: 28 };
+    const crank = { x: -12, y: 28 };
+    const seatPost = { x: -52, y: -62 };
+    const headTube = { x: 68, y: -68 };
+
+    // 1. WHEELS
+    if (!onlyPart || onlyPart === 'wheels') {
+      if (onlyPart === 'wheels') {
+        drawWheel(-85, 0, 72, wheelStyle, time * 2);
+        drawWheel(85, 0, 72, wheelStyle, time * 2);
+      } else {
+        drawWheel(rearW.x, rearW.y, 56, wheelStyle, state.pedalAngle);
+        drawWheel(frontW.x, frontW.y, 56, wheelStyle, state.pedalAngle);
+      }
+    }
+
+    // 2. FRAME
+    if (!onlyPart || onlyPart === 'frame') {
+      ctx.save();
+      if (onlyPart === 'frame') ctx.scale(1.35, 1.35);
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = frameStyle.color;
+      ctx.lineWidth = 13;
+
+      ctx.beginPath();
+      ctx.moveTo(rearW.x, rearW.y);
+      ctx.lineTo(seatPost.x, seatPost.y);
+      ctx.lineTo(crank.x, crank.y);
+      ctx.lineTo(rearW.x, rearW.y);
+      ctx.moveTo(seatPost.x, seatPost.y);
+      ctx.lineTo(headTube.x, headTube.y);
+      ctx.lineTo(crank.x, crank.y);
+      ctx.moveTo(headTube.x, headTube.y);
+      ctx.lineTo(frontW.x, frontW.y);
+      ctx.stroke();
+
+      if (frameStyle.pattern !== 'solid') {
+        ctx.strokeStyle = frameStyle.accent;
+        ctx.lineWidth = 4.5;
+        ctx.setLineDash(
+          frameStyle.pattern === 'stripes' ? [8, 10] :
+          frameStyle.pattern === 'dots' ? [2, 12] : [14, 8]
+        );
+        ctx.beginPath();
+        ctx.moveTo(seatPost.x, seatPost.y);
+        ctx.lineTo(headTube.x, headTube.y);
+        ctx.lineTo(crank.x, crank.y);
+        ctx.lineTo(seatPost.x, seatPost.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+
+    // 3. SEAT
+    if (!onlyPart || onlyPart === 'seat') {
+      ctx.save();
+      if (onlyPart === 'seat') {
+        ctx.translate(0, 10);
+        ctx.scale(2.4, 2.4);
+        ctx.translate(-seatPost.x, -seatPost.y + 15);
+      }
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(seatPost.x, seatPost.y);
+      ctx.lineTo(seatPost.x - 6, seatPost.y - 20);
+      ctx.stroke();
+
+      ctx.fillStyle = seatStyle.color;
+      ctx.strokeStyle = seatStyle.rim;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(seatPost.x - 6, seatPost.y - 24, 28, 10, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. HANDLEBARS (+ Streamers)
+    if (!onlyPart || onlyPart === 'handlebars') {
+      ctx.save();
+      if (onlyPart === 'handlebars') {
+        ctx.translate(0, 20);
+        ctx.scale(2.2, 2.2);
+        ctx.translate(-headTube.x, -headTube.y + 20);
+      }
+      ctx.strokeStyle = barStyle.color;
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(headTube.x, headTube.y);
+      ctx.lineTo(headTube.x - 5, headTube.y - 26);
+      if (barStyle.shape === 'bmx') {
+        ctx.lineTo(headTube.x - 18, headTube.y - 44);
+      } else if (barStyle.shape === 'drop') {
+        ctx.arc(headTube.x + 10, headTube.y - 20, 14, Math.PI, Math.PI * 0.2, true);
+      } else {
+        ctx.lineTo(headTube.x - 24, headTube.y - 28);
+      }
+      ctx.stroke();
+
+      const gripX = barStyle.shape === 'bmx' ? headTube.x - 18 : headTube.x - 24;
+      const gripY = barStyle.shape === 'bmx' ? headTube.y - 44 : headTube.y - 28;
+      ctx.strokeStyle = barStyle.grip;
+      ctx.lineWidth = 11;
+      ctx.beginPath();
+      ctx.moveTo(gripX, gripY);
+      ctx.lineTo(gripX - 16, gripY + 3);
+      ctx.stroke();
+
+      drawStreamers(gripX - 14, gripY + 3, state.bike.streamers, time);
+      ctx.restore();
+    }
+
+    // 5. BELL
+    if (!onlyPart || onlyPart === 'bell') {
+      ctx.save();
+      const bellX = headTube.x + 4;
+      const bellY = headTube.y - 34;
+      if (onlyPart === 'bell') {
+        ctx.scale(3.2, 3.2);
+        ctx.translate(-bellX, -bellY);
+      }
+      ctx.fillStyle = bellStyle.color;
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(bellX, bellY, 12, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      if (state.bellRingTimer > 0) {
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(bellX, bellY - 6, 16 + Math.sin(time * 30) * 3, Math.PI * 1.1, Math.PI * 1.9);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 6. PEDALS
+    if (!onlyPart || onlyPart === 'pedals') {
+      ctx.save();
+      if (onlyPart === 'pedals') {
+        ctx.scale(2.5, 2.5);
+        ctx.translate(-crank.x, -crank.y);
+      }
+      ctx.fillStyle = '#cbd5e1';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(crank.x, crank.y, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      const px = crank.x + Math.cos(state.pedalAngle) * 26;
+      const py = crank.y + Math.sin(state.pedalAngle) * 26;
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(crank.x, crank.y);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+
+      ctx.fillStyle = pedalStyle.color;
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(px - 11, py - 5, 22, 10, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  function drawPointerArrow(x, y, labelText, time) {
+    const bounce = Math.sin(time * 6) * 8;
+    ctx.save();
+    ctx.translate(x, y + bounce);
+
+    ctx.fillStyle = '#fde047';
+    ctx.strokeStyle = '#ca8a04';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    const textW = ctx.measureText(labelText).width + 28;
+    ctx.beginPath();
+    ctx.roundRect(-textW / 2, -78, textW, 40, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.fillText(labelText, 0, -52);
+
+    ctx.fillStyle = '#ef4444';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-10, -34);
+    ctx.lineTo(10, -34);
+    ctx.lineTo(10, -14);
+    ctx.lineTo(20, -14);
+    ctx.lineTo(0, 6);
+    ctx.lineTo(-20, -14);
+    ctx.lineTo(-10, -14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // 6. RENDERING SCREENS (CUSTOMIZER, MAP, RIDE)
+  // =========================================================================
+  function renderCustomizerScreen(time) {
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, '#bae6fd');
+    grad.addColorStop(0.68, '#e0f2fe');
+    grad.addColorStop(0.68, '#86efac');
+    grad.addColorStop(1, '#4ade80');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const { x: cx, y: cy, scale: s } = getBikeCenterOnCustomizer();
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 92 * s, 195 * s, 24 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawBike(cx, cy, s, state.focusedPart, time);
+
+    if (!state.focusedPart) {
+      const frameArrowLabel = state.hasClickedFrameOnce
+        ? 'Click Frame (or any part) to customize!'
+        : 'Click on the bike frame!';
+      drawPointerArrow(cx + 5 * s, cy - 42 * s, frameArrowLabel, time);
+
+      const boxes = getPartHitboxes(cx, cy, s);
+      ctx.font = 'bold 13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      const labels = [
+        { id: 'bell', key: 'Bell', box: boxes.bell },
+        { id: 'handlebars', key: 'Handlebars', box: boxes.handlebars },
+        { id: 'seat', key: 'Seat', box: boxes.seat },
+        { id: 'pedals', key: 'Pedals', box: boxes.pedals },
+        { id: 'wheels', key: 'Wheels', box: boxes.wheelsLeft }
+      ];
+      labels.forEach(item => {
+        const isHovered = state.hoveredPart === item.id;
+        ctx.fillStyle = isHovered ? '#ff6b35' : 'rgba(15, 23, 42, 0.78)';
+        ctx.beginPath();
+        ctx.roundRect(item.box.x - 45, item.box.y - item.box.r - 24, 90, 22, 6);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(item.key, item.box.x, item.box.y - item.box.r - 9);
+      });
+    }
+
+    if (state.draggingStreamer) {
+      drawStreamers(state.mouseX, state.mouseY, state.draggingStreamer, time);
+    }
+  }
+
+  function renderMapScreen() {
+    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    grad.addColorStop(0, '#a7f3d0');
+    grad.addColorStop(0.5, '#fde68a');
+    grad.addColorStop(1, '#bae6fd');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.ellipse(canvas.width * 0.32, canvas.height * 0.56, 140, 80, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 6;
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath();
+    for (let i = 1; i < ROUTES.length; i++) {
+      const r = ROUTES[i];
+      const x = r.mapX * canvas.width;
+      const y = r.mapY * canvas.height;
+      if (i === 1) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let i = 1; i < ROUTES.length; i++) {
+      const r = ROUTES[i];
+      const x = r.mapX * canvas.width;
+      const y = r.mapY * canvas.height;
+      const unlocked = r.index <= state.unlockedRouteIndex;
+
+      ctx.save();
+      ctx.translate(x, y);
+
+      ctx.fillStyle = unlocked ? '#22c55e' : '#94a3b8';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(unlocked ? String(i) : '🔒', 0, 2);
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.beginPath();
+      ctx.roundRect(-115, 42, 230, 48, 10);
+      ctx.fill();
+
+      ctx.fillStyle = unlocked ? '#fde047' : '#cbd5e1';
+      ctx.font = 'bold 13px "Segoe UI", sans-serif';
+      ctx.fillText(r.name, 0, 58);
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '11px "Segoe UI", sans-serif';
+      ctx.fillText(r.subtitle, 0, 76);
+
+      ctx.restore();
+    }
+  }
+
+  function drawRiderAndHelmet(x, y, scale, hasHelmet, suitChoice, nosePinched) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    const bodyColor = suitChoice ? suitChoice.color : '#3b82f6';
+
+    ctx.strokeStyle = bodyColor;
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -45);
+    ctx.lineTo(-8, 0);
+    ctx.lineTo(-16, 36);
+    ctx.moveTo(-8, 0);
+    ctx.lineTo(14, 34);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, -38);
+    if (nosePinched) {
+      ctx.lineTo(14, -64);
+    } else {
+      ctx.lineTo(34, -18);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#fed7aa';
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(4, -66, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (state.activeRoute && state.activeRoute.id === 'space') {
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.65)';
+      ctx.beginPath();
+      ctx.arc(8, -66, 14, -0.6, 0.6);
+      ctx.fill();
+    }
+
+    if (nosePinched) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('🤏', 14, -62);
+    }
+
+    if (hasHelmet) {
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(4, -72, 20, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function renderPreRideScene(time) {
+    drawRouteEnvironment(time);
+
+    const riderX = canvas.width * 0.42;
+    const riderY = canvas.height * 0.63;
+    const bikeX = canvas.width * 0.56;
+    const bikeY = canvas.height * 0.65;
+
+    drawBike(bikeX, bikeY, 0.9, null, time);
+    drawRiderAndHelmet(riderX, riderY - 48, 1.0, state.helmetEquipped, state.suitChoice, false);
+
+    if (state.ridePhase === 'HELMET_DRAG') {
+      ctx.save();
+      ctx.translate(state.helmetPos.x, state.helmetPos.y);
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 26, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 14px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('DRAG HELMET', 0, 22);
+      ctx.restore();
+
+      drawPointerArrow(riderX + 4, riderY - 135, 'Drag Helmet to Head!', time);
+    } else if (state.ridePhase === 'CLICK_BIKE') {
+      drawPointerArrow(bikeX, bikeY - 95, 'Click on the bike to start biking!', time);
+    }
+  }
+
+  function drawRouteEnvironment(time) {
+    const route = state.activeRoute;
+    const w = canvas.width;
+    const h = canvas.height;
+    const d = state.distanceMeters;
+
+    if (!route) return;
+
+    if (route.id === 'practice' || route.id === 'hill_lake') {
+      const sky = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+      sky.addColorStop(0, '#38bdf8');
+      sky.addColorStop(1, '#bae6fd');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      const hillHeight = route.id === 'hill_lake' ? Math.sin((d / 1000) * Math.PI) * 110 : 20;
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.62 - hillHeight);
+      ctx.quadraticCurveTo(w * 0.5, h * 0.45 - hillHeight, w, h * 0.62 - hillHeight);
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.fill();
+
+      if (route.id === 'hill_lake' && d > 350 && d < 950) {
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(0, h * 0.56, w, h * 0.14);
+      }
+    } else if (route.id === 'underwater') {
+      const deepFactor = (d > 800 && d < 1200) ? 1 : 0;
+      const water = ctx.createLinearGradient(0, 0, 0, h);
+      water.addColorStop(0, deepFactor ? '#020617' : '#0369a1');
+      water.addColorStop(1, deepFactor ? '#0f172a' : '#0c4a6e');
+      ctx.fillStyle = water;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      for (let i = 0; i < 18; i++) {
+        const bx = ((i * 137 - d * 15) % w + w) % w;
+        const by = ((i * 93 - time * 60) % h + h) % h;
+        ctx.beginPath();
+        ctx.arc(bx, by, 6 + (i % 4) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(0, h * 0.68, w, h * 0.32);
+    } else if (route.id === 'sky') {
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#1d4ed8');
+      sky.addColorStop(0.6, '#7dd3fc');
+      sky.addColorStop(1, '#f0f9ff');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let i = 0; i < 8; i++) {
+        const cx = ((i * 260 - d * 25) % w + w) % w;
+        const cy = 90 + (i % 3) * 110;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+        ctx.arc(cx + 30, cy + 5, 32, 0, Math.PI * 2);
+        ctx.arc(cx - 30, cy + 8, 28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (route.id === 'space') {
+      ctx.fillStyle = '#030712';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 45; i++) {
+        const sx = ((i * 173 - d * 4) % w + w) % w;
+        const sy = (i * 71) % (h * 0.75);
+        ctx.fillRect(sx, sy, 3, 3);
+      }
+
+      ctx.save();
+      if (d < 2700) {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(w * 0.72, h * 0.26, 75, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🌕 THE MOON', w * 0.68, h * 0.26 + 105);
+      } else if (d < 5600) {
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(w * 0.72, h * 0.26, 80, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🪐 MARS', w * 0.70, h * 0.26 + 110);
+      } else {
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(w * 0.72, h * 0.26, 85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(w * 0.70, h * 0.24, 35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#bae6fd';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🌍 EARTH RETURN', w * 0.66, h * 0.26 + 115);
+      }
+      ctx.restore();
+    } else if (route.id === 'track') {
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(0, 0, w, h * 0.55);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(0, h * 0.55, w, h * 0.45);
+    } else if (route.id === 'stables') {
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(0, 0, w, h * 0.58);
+      ctx.fillStyle = '#84cc16';
+      ctx.fillRect(0, h * 0.58, w, h * 0.42);
+    }
+
+    const roadTopY = h * 0.64;
+    const roadBottomY = h * 0.88;
+    ctx.fillStyle =
+      route.id === 'track' ? '#ea580c' :
+      route.id === 'space' ? '#3b82f6' :
+      route.id === 'sky'   ? '#fde047' :
+      route.id === 'stables' ? '#d97706' : '#64748b';
+
+    ctx.fillRect(0, roadTopY, w, roadBottomY - roadTopY);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([28, 28]);
+    ctx.lineDashOffset = (d * 25) % 56;
+    ctx.beginPath();
+    ctx.moveTo(0, (roadTopY + roadBottomY) / 2);
+    ctx.lineTo(w, (roadTopY + roadBottomY) / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // =========================================================================
+  // 7. ACTIVE RIDE UPDATE & RENDER LOOP
+  // =========================================================================
+  function updateRidePhysics(dt) {
+    const route = state.activeRoute;
+    if (!route) return;
+
+    if (state.bellRingTimer > 0) state.bellRingTimer -= dt;
+    if (state.hitCooldown > 0) state.hitCooldown -= dt;
+    if (state.nosePinchTimer > 0) {
+      state.nosePinchTimer -= dt;
+      if (state.nosePinchTimer <= 0) state.nosePinched = false;
+    }
+
+    if (state.ridePhase === 'FREEFALL') {
+      if (!state.parachuteDeployed) {
+        state.freefallTimer -= dt;
+        state.freefallAltitude -= dt * 33;
+        if (state.freefallTimer <= 0) {
+          showBanner('💥 Oh no! You didn’t deploy the parachute in 30s! Returning to Map...', 2600);
+          setTimeout(() => {
+            switchScreen('MAP');
+          }, 1800);
+          state.ridePhase = 'PRE_CHOICE';
+        }
+      } else {
+        state.freefallAltitude -= dt * 180;
+        if (state.freefallAltitude <= 0) {
+          finishRouteSuccess();
+        }
+      }
+      return;
+    }
+
+    if (state.ridePhase !== 'RIDING') return;
+
+    if (keys.ArrowDown) {
+      state.speed = -5.5;
+    } else {
+      state.speed = 9.0;
+    }
+
+    if (keys.ArrowLeft) {
+      state.lateralOffset = Math.max(-0.85, state.lateralOffset - dt * 1.45);
+      state.bikeAngle = -0.12;
+    } else if (keys.ArrowRight) {
+      state.lateralOffset = Math.min(0.85, state.lateralOffset + dt * 1.45);
+      state.bikeAngle = 0.12;
+    } else {
+      state.bikeAngle *= 0.85;
+    }
+
+    const isBouncy = Boolean(state.bike.tempBouncyWheel);
+    if (keys.ArrowUp && state.isGrounded) {
+      state.jumpVy = isBouncy ? 560 : 410;
+      state.isGrounded = false;
+    }
+
+    if (!state.isGrounded) {
+      state.jumpY += state.jumpVy * dt;
+      state.jumpVy -= 980 * dt;
+      if (state.jumpY <= 0) {
+        state.jumpY = 0;
+        if (isBouncy && Math.abs(state.jumpVy) > 180) {
+          state.jumpVy = Math.abs(state.jumpVy) * 0.38;
+        } else {
+          state.jumpVy = 0;
+          state.isGrounded = true;
+        }
+      }
+    }
+
+    state.distanceMeters = Math.max(0, state.distanceMeters + state.speed * route.scaleFactor * dt);
+    state.pedalAngle += state.speed * dt * 1.6;
+
+    const bikeScreenMeters = state.distanceMeters;
+    state.obstacles.forEach(obs => {
+      const distDiff = obs.meters - bikeScreenMeters;
+
+      if (obs.type === 'poop' && distDiff > -40 && distDiff < 240 && !state.nosePinched) {
+        showBanner('💩 middle click to pinch your nose! Eww!');
+      }
+
+      if (Math.abs(distDiff) < 18 && state.hitCooldown <= 0) {
+        const laneDiff = Math.abs(state.lateralOffset - obs.lane);
+        if (obs.type === 'hurdle') {
+          if (state.jumpY < 38) {
+            state.hitCooldown = 1.0;
+            state.distanceMeters = Math.max(0, state.distanceMeters - 22);
+            showBanner('🚧 Bumped hurdle! Press UP ARROW to jump over hurdles!', 1500);
+          }
+        } else if (obs.type === 'poop') {
+          if (laneDiff < 0.35 && !state.nosePinched && state.jumpY < 40) {
+            state.hitCooldown = 1.2;
+            showBanner('🤢 Eww! Ride around the poop pile or middle-click to pinch your nose!', 2000);
+          }
+        } else if (laneDiff < 0.32 && state.jumpY < 45) {
+          state.hitCooldown = 1.0;
+          state.distanceMeters = Math.max(0, state.distanceMeters - 30);
+          showBanner(`⚠️ Dodged ${obs.label}! Use Left/Right or Jump!`, 1400);
+        }
+      }
+    });
+
+    document.getElementById('hud-route-name').textContent = route.name;
+    document.getElementById('hud-distance').textContent =
+      `${Math.floor(state.distanceMeters)} m / ${route.totalMeters} m`;
+    const pct = Math.min(100, (state.distanceMeters / route.totalMeters) * 100);
+    document.getElementById('hud-progress-fill').style.width = `${pct}%`;
+
+    const hudExtra = document.getElementById('hud-extra');
+    if (route.id === 'track') {
+      const lap = Math.min(5, Math.floor(state.distanceMeters / 200) + 1);
+      hudExtra.textContent = `Lap ${lap} / 5 • Hurdle every 50m`;
+    } else if (route.id === 'space') {
+      const zone = state.distanceMeters < 2700 ? 'Moon Orbit' : state.distanceMeters < 5600 ? 'Mars Approach' : 'Returning to Earth';
+      hudExtra.textContent = `Sector: ${zone}`;
+    } else if (route.id === 'stables') {
+      const zone = state.distanceMeters < 350 ? 'Pasture Start' : state.distanceMeters < 1250 ? 'Horse Stalls & Poop Pile' : 'Riding Arena Finish';
+      hudExtra.textContent = `Zone: ${zone}`;
+    } else {
+      hudExtra.textContent = '';
+    }
+
+    if (state.distanceMeters >= route.totalMeters) {
+      state.distanceMeters = route.totalMeters;
+      if (route.id === 'underwater') {
+        triggerUnderwaterTowelSequence();
+      } else if (route.id === 'sky') {
+        state.ridePhase = 'FREEFALL';
+        state.freefallTimer = 30.0;
+        state.freefallAltitude = 1000;
+        showBanner('🪂 Track ended! Click to deploy parachute! (30s remaining)');
+      } else {
+        showBanner('🏁 Route Complete! Returning to Bike Customizer...', 2000);
+        state.ridePhase = 'PRE_CHOICE';
+        setTimeout(() => finishRouteSuccess(), 1300);
+      }
+    }
+  }
+
+  function triggerUnderwaterTowelSequence() {
+    state.ridePhase = 'PRE_CHOICE';
+    openChoiceModal('time to dry off, pick a towel and drag it to you to dry off!', [
+      { name: 'Sunny Beach Towel', icon: '🏖️', color: '#facc15' },
+      { name: 'Fluffy Coral Towel', icon: '🌺', color: '#f43f5e' },
+      { name: 'Ocean Stripe Towel', icon: '🌊', color: '#38bdf8' }
+    ], (towel) => {
+      state.selectedTowel = towel;
+      state.ridePhase = 'TOWEL_DRY';
+      state.towelPos = { x: canvas.width * 0.25, y: canvas.height * 0.55 };
+      state.dryProgress = 0;
+      showBanner('🧺 Drag the towel back and forth over your rider to dry off!');
+    });
+  }
+
+  function renderActiveRide(time) {
+    const route = state.activeRoute;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    if (state.ridePhase === 'FREEFALL') {
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#0284c7');
+      sky.addColorStop(0.75, '#bae6fd');
+      sky.addColorStop(0.75, '#4ade80');
+      sky.addColorStop(1, '#16a34a');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(w * 0.35, h * 0.78, w * 0.3, 18);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏁 SKY FINISH LINE 🏁', w * 0.5, h * 0.78 + 14);
+
+      const bikeY = h * 0.22 + (1 - state.freefallAltitude / 1000) * (h * 0.52);
+
+      if (state.parachuteDeployed) {
+        ctx.save();
+        ctx.translate(w * 0.5, bikeY - 125);
+        ctx.fillStyle = (state.cornerItem && state.cornerItem.color) ? state.cornerItem.color : '#ef4444';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, 75, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-65, 0); ctx.lineTo(-20, 95);
+        ctx.moveTo(65, 0);  ctx.lineTo(20, 95);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.translate(w * 0.5, h * 0.45);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.92)';
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(-180, -36, 360, 72, 18);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🪂 CLICK TO DEPLOY PARACHUTE!', 0, -4);
+        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+        ctx.fillText(`Time before ground impact: ${state.freefallTimer.toFixed(1)}s`, 0, 22);
+        ctx.restore();
+      }
+
+      drawRiderAndHelmet(w * 0.5 - 10, bikeY - 45, 0.75, true, state.suitChoice, false);
+      drawBike(w * 0.5, bikeY, 0.75, null, time);
+      return;
+    }
+
+    if (state.ridePhase === 'TOWEL_DRY') {
+      drawRouteEnvironment(time);
+      const rx = w * 0.5;
+      const ry = h * 0.6;
+      drawRiderAndHelmet(rx, ry - 40, 1.2, true, state.suitChoice, false);
+
+      if (state.dryProgress < 100) {
+        ctx.fillStyle = '#38bdf8';
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath();
+          ctx.arc(rx - 30 + i * 12, ry - 50 + Math.sin(time * 8 + i) * 10, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.save();
+      ctx.translate(state.towelPos.x, state.towelPos.y);
+      ctx.fillStyle = (state.selectedTowel && state.selectedTowel.color) ? state.selectedTowel.color : '#facc15';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(-55, -38, 110, 76, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText((state.selectedTowel && state.selectedTowel.name) ? state.selectedTowel.name : 'Towel', 0, 5);
+      ctx.fillText(`${Math.min(100, Math.floor(state.dryProgress))}% Dry`, 0, 24);
+      ctx.restore();
+      return;
+    }
+
+    drawRouteEnvironment(time);
+
+    const roadCenterY = h * 0.76;
+    const laneHalfSpread = h * 0.09;
+
+    state.obstacles.forEach(obs => {
+      const meterDelta = obs.meters - state.distanceMeters;
+      if (meterDelta > -120 && meterDelta < 500) {
+        const ox = w * 0.28 + meterDelta * 2.2;
+        const oy = roadCenterY + obs.lane * laneHalfSpread - (obs.high ? 85 : 0);
+
+        ctx.save();
+        ctx.translate(ox, oy);
+        if (obs.type === 'hurdle') {
+          ctx.strokeStyle = '#ffffff';
+          ctx.fillStyle = '#ef4444';
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.rect(-8, -46, 16, 46);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.font = '42px sans-serif';
+          ctx.textAlign = 'center';
+          const emoji =
+            obs.type === 'crab' ? '🦀' :
+            obs.type === 'octopus' ? '🐙' :
+            obs.type === 'shark' ? '🦈' :
+            obs.type === 'bird' ? '🦅' :
+            obs.type === 'stall' ? '🐴' : '💩';
+          ctx.fillText(emoji, 0, 0);
+          ctx.font = 'bold 12px "Segoe UI", sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(obs.label, 0, 20);
+        }
+        ctx.restore();
+      }
+    });
+
+    let loopOffsetX = 0;
+    let loopOffsetY = 0;
+    let loopRotation = state.bikeAngle;
+
+    if (route.id === 'sky' && state.distanceMeters > 450 && state.distanceMeters < 850) {
+      const loopProgress = ((state.distanceMeters - 450) / 400) * Math.PI * 2;
+      loopOffsetX = Math.sin(loopProgress) * 65;
+      loopOffsetY = -(1 - Math.cos(loopProgress)) * 85;
+      loopRotation = -loopProgress;
+    }
+
+    const bikeX = w * 0.28 + loopOffsetX;
+    const bikeGroundY = roadCenterY + state.lateralOffset * laneHalfSpread;
+    const bikeY = bikeGroundY - state.jumpY + loopOffsetY;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(bikeX, bikeGroundY + 45, 70, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(bikeX, bikeY);
+    ctx.rotate(loopRotation);
+    drawRiderAndHelmet(-12, -48, 0.72, true, state.suitChoice, state.nosePinched);
+    drawBike(0, 0, 0.68, null, time);
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // 8. MAIN ANIMATION LOOP
+  // =========================================================================
+  let lastTime = performance.now();
+  function gameLoop(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    const timeSec = now / 1000;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (state.screen === 'CUSTOMIZER') {
+      if (state.bellRingTimer > 0) state.bellRingTimer -= dt;
+      renderCustomizerScreen(timeSec);
+    } else if (state.screen === 'MAP') {
+      renderMapScreen();
+    } else if (state.screen === 'RIDE') {
+      if (state.ridePhase === 'HELMET_DRAG' || state.ridePhase === 'CLICK_BIKE' || state.ridePhase === 'PRE_CHOICE') {
+        renderPreRideScene(timeSec);
+      } else {
+        updateRidePhysics(dt);
+        renderActiveRide(timeSec);
+      }
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  requestAnimationFrame(gameLoop);
+})();
+</script>
+</body>
+</html>
