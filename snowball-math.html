@@ -908,6 +908,7 @@
   let sessionActive = false;
   let celebrationInProgress = false;
   let grandFinaleActive = false;
+  let isPostMasteryReview = false; // True once the player has achieved total mastery across all 8 groups
 
   // Current question state
   let currentFact = null;
@@ -1075,11 +1076,13 @@
       return unmastered[Math.floor(Math.random() * poolSize)].fact;
     }
 
-    // All active facts are mastered (e.g. continued review session): pick least recently seen / lowest dueTurn
+    // All active facts are mastered (e.g. post-mastery review session):
+    // pick facts with earliest dueTurn / least recently seen, with a small tie-breaker pool
     const allSorted = candidates
       .map(f => ({ fact: f, st: currentPlayer.facts[f.id] }))
       .sort((a, b) => (a.st.dueTurn - b.st.dueTurn) || (a.st.lastSeenTurn - b.st.lastSeenTurn));
-    return allSorted[0].fact;
+    const reviewPool = Math.min(3, allSorted.length);
+    return allSorted[Math.floor(Math.random() * reviewPool)].fact;
   }
 
   /* =========================================================================
@@ -1335,9 +1338,20 @@
     stopCelebrationParticles();
     initSnowmanStage();
 
+    // If the player has already mastered all 8 groups (including profiles from earlier saves),
+    // mark them as in post-mastery review so the early snowball barrage trigger stays disabled.
+    if (areAllEightGroupsMastered(currentPlayer)) {
+      currentPlayer.allMasteredCelebrated = true;
+      saveProfiles();
+    }
+    isPostMasteryReview = Boolean(currentPlayer.allMasteredCelebrated);
+
     sessionActive = true;
     celebrationInProgress = false;
     lastFactId = null;
+
+    feedbackMsgEl.style.color = '#0f172a';
+    feedbackMsgEl.textContent = 'Type or click digits, then press Enter!';
 
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('play-panel').style.display = 'block';
@@ -1416,11 +1430,12 @@
         }
       }
 
-      // Check if all active facts are now mastered before 5 snowmen are completed
+      // Only trigger early-completion snowball barrage when learning groups for the first time.
+      // Once in post-mastery review, play continues until all 5 snowmen are built.
       const stats = getGroupMasteryStats(currentPlayer);
       const completedSnowmen = stacks.filter(s => s.completed).length;
 
-      if (stats.allActiveMastered && completedSnowmen < MAX_SNOWMEN) {
+      if (!isPostMasteryReview && stats.allActiveMastered && completedSnowmen < MAX_SNOWMEN) {
         triggerCelebratorySnowballBarrage();
         return;
       }
@@ -1435,7 +1450,7 @@
     }
   }
 
-  // If the student masters all active groups before completing 5 snowmen,
+  // If the student masters their current learning groups before completing 5 snowmen,
   // throw a celebratory volley of snowballs to complete all 5 snowmen!
   function triggerCelebratorySnowballBarrage() {
     if (celebrationInProgress) return;
@@ -1476,10 +1491,14 @@
     const statsBoxEl = document.getElementById('session-stats-box');
 
     if (allEightMastered) {
+      currentPlayer.allMasteredCelebrated = true;
       triggerGrandFinaleCelebration();
-      titleEl.textContent = '🎆 ALL MULTIPLICATION FACTS MASTERED! 🍓';
-      descEl.textContent =
-        'Incredible job! You mastered all 8 groups! Enjoy the balloons, nose fireworks, confetti, and raining raspberries & sweet berries!';
+      titleEl.textContent = isPostMasteryReview
+        ? '🎆 TOTAL MASTERY MAINTAINED! 🍓'
+        : '🎆 ALL MULTIPLICATION FACTS MASTERED! 🍓';
+      descEl.textContent = isPostMasteryReview
+        ? 'Awesome review session! You built all 5 snowmen and demonstrated total mastery across all 8 groups! Enjoy the balloons, nose fireworks, confetti, and raining berries!'
+        : 'Incredible job! You mastered all 8 groups! Enjoy the balloons, nose fireworks, confetti, and raining raspberries & sweet berries!';
       statsBoxEl.innerHTML = `
         <div>🏆 Mastered: <strong>${stats.masteredCount} / ${stats.totalCount}</strong> total facts (100%)</div>
         <div style="margin-top:6px;">You can continue playing new sessions anytime for spaced-repetition review!</div>
@@ -1497,8 +1516,9 @@
       }
     } else {
       titleEl.textContent = '⛄ 5 Tall Snowmen Completed!';
-      descEl.textContent =
-        'Great job completing 5 snowmen! Keep practicing your current groups in the next session to master all facts and unlock the next group.';
+      descEl.textContent = isPostMasteryReview
+        ? 'Great job building 5 snowmen! A few facts need a quick brush-up to restore 100% total mastery and unlock the celebration fireworks again.'
+        : 'Great job completing 5 snowmen! Keep practicing your current groups in the next session to master all facts and unlock the next group.';
       statsBoxEl.innerHTML = `
         <div>📊 Current Mastery: <strong>${stats.masteredCount} / ${stats.totalCount} facts (${stats.percent}%)</strong></div>
         <div style="margin-top:6px;">Keep building snowmen to master your current multiplication facts!</div>
