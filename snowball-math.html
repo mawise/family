@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multiplication Table Snowballs</title>
+  <style>
+    :root {
+      --sky-top: #38bdf8;
+      --sky-bottom: #e0f2fe;
+      --ice-top: #bae6fd;
+      --ice-mid: #7dd3fc;
+      --ice-deep: #0284c7;
+      --panel-bg: rgba(255, 255, 255, 0.92);
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --accent: #f59e0b;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --text-main: #0f172a;
+      --ball-size: 34px;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--text-main);
+      overflow: hidden;
+      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 68%, var(--ice-top) 68%, var(--ice-mid) 100%);
+    }
+
+    /* ================= WORLD & SCENERY ================= */
+    #scene {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Shining Sun */
+    .sun-container {
+      position: absolute;
+      top: 32px;
+      right: 65px;
+      width: 96px;
+      height: 96px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .sun-core {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #fef08a, #facc15 55%, #f59e0b 100%);
+      box-shadow: 0 0 45px 18px rgba(250, 204, 21, 0.65),
+                  0 0 90px 35px rgba(251, 191, 36, 0.35);
+      animation: sunPulse 4s ease-in-out infinite;
+    }
+
+    .sun-rays {
+      position: absolute;
+      inset: -24px;
+      border-radius: 50%;
+      background: repeating-conic-gradient(
+        from 0deg,
+        rgba(254, 240, 138, 0.38) 0deg 10deg,
+        transparent 10deg 24deg
+      );
+      mask-image: radial-gradient(circle, transparent 38%, black 42%, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle, transparent 38%, black 42%, transparent 70%);
+      animation: sunSpin 28s linear infinite;
+    }
+
+    @keyframes sunSpin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes sunPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    /* Distant Snowy Hills */
+    .mountain {
+      position: absolute;
+      bottom: 26%;
+      width: 0;
+      height: 0;
+      border-left: 180px solid transparent;
+      border-right: 180px solid transparent;
+      border-bottom: 160px solid #e2e8f0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+    .mountain.m1 { left: -40px; border-bottom-color: #cbd5e1; transform: scale(1.2); }
+    .mountain.m2 { left: 18%; border-bottom-color: #f1f5f9; transform: scale(0.95); }
+    .mountain.m3 { right: 12%; border-bottom-color: #dbeafe; transform: scale(1.1); }
+    .mountain.m4 { right: -60px; border-bottom-color: #cbd5e1; transform: scale(0.85); }
+
+    /* Frozen Lake Ground */
+    .frozen-lake {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 27%;
+      background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 22%, #38bdf8 68%, #0284c7 100%);
+      border-top: 5px solid #ffffff;
+      box-shadow: inset 0 12px 24px rgba(255, 255, 255, 0.8);
+      z-index: 3;
+    }
+
+    .ice-sheen {
+      position: absolute;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.65);
+      border-radius: 4px;
+      transform: skewX(-35deg);
+    }
+
+    /* ================= HUD & TOP BAR ================= */
+    #hud {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .hud-card {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.15);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.92rem;
+    }
+
+    .badge {
+      background: #e0f2fe;
+      color: var(--primary-dark);
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+    }
+
+    .btn-small {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      padding: 5px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.82rem;
+      transition: all 0.15s;
+    }
+    .btn-small:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .progress-bar-wrap {
+      width: 130px;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #cbd5e1;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      transition: width 0.3s ease;
+    }
+
+    /* ================= QUESTION & KEYPAD PANEL ================= */
+    #play-panel {
+      position: absolute;
+      top: 72px;
+      left: 24px;
+      width: 330px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+      border: 2px solid #ffffff;
+      z-index: 25;
+      display: none;
+    }
+
+    .equation-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 2.35rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 4px 0 10px;
+    }
+
+    #answer-box {
+      min-width: 84px;
+      height: 54px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 3px solid #38bdf8;
+      background: #f8fafc;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: var(--primary-dark);
+      font-size: 2.1rem;
+      box-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.08);
+      position: relative;
+    }
+
+    .answer-digit {
+      display: inline-block;
+      min-width: 22px;
+      text-align: center;
+      transition: transform 0.15s;
+    }
+
+    #feedback-msg {
+      min-height: 22px;
+      text-align: center;
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    /* On-screen Keypad */
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+
+    .key-btn {
+      height: 42px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #1e293b;
+      cursor: pointer;
+      box-shadow: 0 2px 0 #cbd5e1;
+      transition: transform 0.08s, background 0.15s;
+    }
+    .key-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 0 0 #cbd5e1;
+    }
+    .key-btn:hover {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+    }
+    .key-btn.key-clear {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+    .key-btn.key-enter {
+      background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+      color: white;
+      border-color: #0369a1;
+      box-shadow: 0 2px 0 #0369a1;
+    }
+
+    /* ================= SNOWMEN STAGE ON FROZEN LAKE ================= */
+    #snowman-stage {
+      position: absolute;
+      left: 370px;
+      right: 30px;
+      bottom: 13%;
+      height: 440px;
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    @media (max-width: 960px) {
+      #snowman-stage {
+        left: 20px;
+        right: 20px;
+        bottom: 6%;
+      }
+      #play-panel {
+        width: 280px;
+        padding: 12px;
+      }
+    }
+
+    .snowman-slot {
+      position: relative;
+      width: 110px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .slot-base-shadow {
+      position: absolute;
+      bottom: -8px;
+      width: 76px;
+      height: 16px;
+      background: rgba(2, 132, 199, 0.28);
+      border-radius: 50%;
+      z-index: 1;
+    }
+
+    .stack-balls-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* Individual stacked snowball */
+    .snowball-node {
+      position: absolute;
+      left: 50%;
+      width: var(--ball-size);
+      height: var(--ball-size);
+      margin-left: calc(var(--ball-size) / -2);
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 28%, #ffffff 0%, #f1f5f9 62%, #cbd5e1 100%);
+      box-shadow: inset -3px -3px 6px rgba(148, 163, 184, 0.55),
+                  0 3px 6px rgba(15, 23, 42, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: #475569;
+      transition: bottom 0.48s cubic-bezier(0.34, 1.45, 0.64, 1),
+                  transform 0.42s ease,
+                  opacity 0.42s ease;
+    }
+
+    /* Melting animation at bottom of stack */
+    .snowball-node.melting-away {
+      transform: translateY(10px) scaleX(1.85) scaleY(0.18);
+      background: #bae6fd;
+      opacity: 0;
+    }
+
+    /* Melt gauge under active unfinished stack */
+    .melt-gauge {
+      position: absolute;
+      bottom: -24px;
+      width: 68px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.65);
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid #0284c7;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .melt-gauge.visible {
+      opacity: 1;
+    }
+    .melt-gauge-bar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #38bdf8, #f59e0b);
+    }
+
+    .stack-count-label {
+      position: absolute;
+      bottom: -44px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: #0369a1;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 1px 8px;
+      border-radius: 99px;
+    }
+
+    /* ================= SNOWMAN DECORATIONS (TOP 2 SNOWBALLS: #9 & #10) ================= */
+    .snowman-face {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .eye {
+      position: absolute;
+      top: 9px;
+      width: 4.5px;
+      height: 4.5px;
+      background: #0f172a;
+      border-radius: 50%;
+    }
+    .eye.left { left: 8px; }
+    .eye.right { right: 8px; }
+
+    /* Carrot Nose */
+    .carrot-nose {
+      position: absolute;
+      top: 13px;
+      left: 17px;
+      width: 0;
+      height: 0;
+      border-top: 3.5px solid transparent;
+      border-bottom: 3.5px solid transparent;
+      border-left: 14px solid #f97316;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+      z-index: 6;
+    }
+
+    .smile {
+      position: absolute;
+      bottom: 6px;
+      left: 9px;
+      width: 16px;
+      height: 7px;
+      border-bottom: 2.5px dotted #0f172a;
+      border-radius: 0 0 12px 12px;
+    }
+
+    /* 9th Snowball Torso: Stick Arms & Buttons */
+    .snowman-torso {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .coal-btn {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 5px;
+      height: 5px;
+      background: #1e293b;
+      border-radius: 50%;
+    }
+    .coal-btn.b1 { top: 7px; }
+    .coal-btn.b2 { top: 15px; }
+    .coal-btn.b3 { top: 23px; }
+
+    .stick-arm {
+      position: absolute;
+      top: 12px;
+      width: 28px;
+      height: 3.5px;
+      background: #78350f;
+      border-radius: 3px;
+    }
+    .stick-arm.left {
+      left: -24px;
+      transform: rotate(22deg);
+    }
+    .stick-arm.right {
+      right: -24px;
+      transform: rotate(-22deg);
+    }
+
+    /* Umbrella on Top of 10th Snowball */
+    .umbrella {
+      position: absolute;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 72px;
+      height: 48px;
+      pointer-events: none;
+      z-index: 8;
+      animation: popUmbrella 0.45s cubic-bezier(0.18, 1.4, 0.4, 1) forwards;
+    }
+    @keyframes popUmbrella {
+      0% { transform: translateX(-50%) scale(0.1); opacity: 0; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+    .umbrella-canopy {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 72px;
+      height: 28px;
+      border-radius: 40px 40px 4px 4px;
+      background: repeating-linear-gradient(
+        90deg,
+        #ef4444 0px 12px,
+        #facc15 12px 24px,
+        #3b82f6 24px 36px
+      );
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    .umbrella-shaft {
+      position: absolute;
+      top: 26px;
+      left: 34px;
+      width: 3px;
+      height: 20px;
+      background: #475569;
+    }
+
+    /* Snowman Balloon (Grand Finale) */
+    .snowman-balloon {
+      position: absolute;
+      bottom: 42px;
+      right: -36px;
+      width: 34px;
+      height: 42px;
+      border-radius: 50% 50% 48% 48%;
+      background: radial-gradient(circle at 30% 30%, #fda4af, #e11d48);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 12;
+      animation: floatBalloon 2.6s ease-in-out infinite alternate;
+    }
+    .snowman-balloon::after {
+      content: '';
+      position: absolute;
+      top: 41px;
+      left: 16px;
+      width: 1.5px;
+      height: 44px;
+      background: #cbd5e1;
+      transform: rotate(18deg);
+      transform-origin: top center;
+    }
+    @keyframes floatBalloon {
+      0% { transform: translateY(0px) rotate(-4deg); }
+      100% { transform: translateY(-10px) rotate(5deg); }
+    }
+
+    /* Flying Snowball in Transit */
+    .flying-snowball {
+      position: fixed;
+      width: var(--ball-size);
+      height: var(--ball-size);
+      margin-left: calc(var(--ball-size) / -2);
+      margin-top: calc(var(--ball-size) / -2);
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ffffff, #e2e8f0);
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1rem;
+      color: #0369a1;
+      z-index: 40;
+      pointer-events: none;
+    }
+
+    /* ================= MODALS (PROFILE & SESSION END) ================= */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 540px;
+      border-radius: 24px;
+      padding: 26px 28px;
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.32);
+      border: 3px solid #bae6fd;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      margin: 0 0 6px;
+      font-size: 1.75rem;
+      color: #0369a1;
+      text-align: center;
+    }
+
+    .modal-subtitle {
+      margin: 0 0 18px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    .profile-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+
+    .profile-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: #f0f9ff;
+      border: 2px solid #bae6fd;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .profile-item:hover {
+      background: #e0f2fe;
+      border-color: #0284c7;
+      transform: translateY(-1px);
+    }
+
+    .profile-name {
+      font-weight: 800;
+      font-size: 1.08rem;
+      color: #0f172a;
+    }
+
+    .profile-meta {
+      font-size: 0.82rem;
+      color: #0369a1;
+      font-weight: 600;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+      transition: filter 0.15s;
+    }
+    .btn-primary:hover {
+      filter: brightness(1.06);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 2px solid #cbd5e1;
+      background: #f8fafc;
+      color: #334155;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 2px solid #cbd5e1;
+      font-size: 1rem;
+      margin-bottom: 14px;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .input-field:focus {
+      outline: none;
+      border-color: #0284c7;
+    }
+
+    .groups-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .group-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .group-checkbox input {
+      accent-color: #0284c7;
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Celebration Canvas for Confetti, Nose Fireworks, & Raining Berries */
+    #fx-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 60;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+<div id="scene">
+  <!-- Shining Sun -->
+  <div class="sun-container" id="sun">
+    <div class="sun-rays"></div>
+    <div class="sun-core"></div>
+  </div>
+
+  <!-- Distant Mountains -->
+  <div class="mountain m1"></div>
+  <div class="mountain m2"></div>
+  <div class="mountain m3"></div>
+  <div class="mountain m4"></div>
+
+  <!-- Top HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-card">
+      <div>
+        <strong id="hud-player-name">Player</strong>
+        <span class="badge" id="hud-groups-badge">Squares</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:0.8rem; font-weight:700; color:#475569;">Mastery:</span>
+        <div class="progress-bar-wrap" title="Mastery of unlocked groups">
+          <div class="progress-bar-fill" id="hud-mastery-bar"></div>
+        </div>
+        <span id="hud-mastery-text" style="font-size:0.8rem; font-weight:700;">0%</span>
+      </div>
+    </div>
+
+    <div class="hud-card">
+      <span>⛄ Snowmen: <strong id="hud-snowmen-count">0 / 5</strong></span>
+      <button class="btn-small" id="btn-switch-player">Switch Player</button>
+    </div>
+  </div>
+
+  <!-- Question & On-Screen Keypad (No visible timer) -->
+  <div id="play-panel">
+    <div class="equation-box">
+      <span id="eq-left">3</span>
+      <span>×</span>
+      <span id="eq-right">3</span>
+      <span>=</span>
+      <div id="answer-box"></div>
+    </div>
+
+    <div id="feedback-msg">Type or click digits, then press Enter!</div>
+
+    <div class="keypad">
+      <button class="key-btn" data-digit="7">7</button>
+      <button class="key-btn" data-digit="8">8</button>
+      <button class="key-btn" data-digit="9">9</button>
+      <button class="key-btn" data-digit="4">4</button>
+      <button class="key-btn" data-digit="5">5</button>
+      <button class="key-btn" data-digit="6">6</button>
+      <button class="key-btn" data-digit="1">1</button>
+      <button class="key-btn" data-digit="2">2</button>
+      <button class="key-btn" data-digit="3">3</button>
+      <button class="key-btn key-clear" id="key-clear">⌫</button>
+      <button class="key-btn" data-digit="0">0</button>
+      <button class="key-btn key-enter" id="key-enter">Enter</button>
+    </div>
+  </div>
+
+  <!-- 5 Snowman Stacks on the Frozen Lake -->
+  <div id="snowman-stage"></div>
+
+  <!-- Frozen Lake -->
+  <div class="frozen-lake">
+    <div class="ice-sheen" style="top:24%; left:10%; width:180px;"></div>
+    <div class="ice-sheen" style="top:55%; left:38%; width:260px;"></div>
+    <div class="ice-sheen" style="top:35%; right:12%; width:210px;"></div>
+  </div>
+
+  <!-- Particle Canvas for Confetti, Nose Fireworks, and Raining Berries -->
+  <canvas id="fx-canvas"></canvas>
+</div>
+
+<!-- ================= OPENING PROFILE MODAL ================= -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-card">
+    <div id="profile-select-view">
+      <h1 class="modal-title">❄️ Multiplication Snowballs</h1>
+      <p class="modal-subtitle">Select your profile or create a new player to build tall snowmen!</p>
+      <div class="profile-list" id="profile-list"></div>
+      <button class="btn-primary" id="btn-show-new-player">+ New Player</button>
+    </div>
+
+    <div id="profile-create-view" class="hidden">
+      <h2 class="modal-title">Create New Player</h2>
+      <p class="modal-subtitle">Enter your name and choose your starting multiplication groups.</p>
+      <input type="text" id="new-player-name" class="input-field" placeholder="Enter player name..." maxlength="24" />
+      <div style="font-weight:700; font-size:0.9rem; margin-bottom:8px; color:#334155;">
+        Starting Fact Groups (Default: Perfect Squares):
+      </div>
+      <div class="groups-grid" id="starting-groups-grid"></div>
+      <button class="btn-primary" id="btn-create-player">Start Playing!</button>
+      <button class="btn-secondary" id="btn-cancel-create">Back to Player List</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SESSION SUMMARY MODAL ================= -->
+<div class="modal-overlay hidden" id="session-modal">
+  <div class="modal-card" style="text-align:center;">
+    <h2 class="modal-title" id="session-modal-title">🎉 5 Snowmen Completed!</h2>
+    <p class="modal-subtitle" id="session-modal-desc"></p>
+    <div id="session-stats-box" style="background:#f0f9ff; border:2px solid #bae6fd; border-radius:14px; padding:14px; margin-bottom:18px; font-weight:600; color:#0369a1;"></div>
+    <button class="btn-primary" id="btn-next-session">Play Next Session</button>
+    <button class="btn-secondary" id="btn-session-switch-user">Switch Player</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  /* =========================================================================
+   * 1. MULTIPLICATION GROUPS DEFINITION (Numbers 3 to 9, 8 Ordered Groups)
+   * ========================================================================= */
+  const FACT_GROUPS = [
+    { id: 'squares', name: 'Perfect Squares', short: 'Squares' },
+    { id: 'f3',      name: '3-Facts',         short: '3s' },
+    { id: 'f4',      name: '4-Facts',         short: '4s' },
+    { id: 'f5',      name: '5-Facts',         short: '5s' },
+    { id: 'f6',      name: '6-Facts',         short: '6s' },
+    { id: 'f7',      name: '7-Facts',         short: '7s' },
+    { id: 'f8',      name: '8-Facts',         short: '8s' },
+    { id: 'f9',      name: '9-Facts',         short: '9s' }
+  ];
+
+  // Generate all 49 facts for 3..9 x 3..9 partitioned cleanly across the 8 groups
+  function buildCatalog() {
+    const catalog = {};
+    for (let a = 3; a <= 9; a++) {
+      for (let b = 3; b <= 9; b++) {
+        const id = `${a}x${b}`;
+        const groupId = (a === b) ? 'squares' : `f${a}`;
+        catalog[id] = { id, a, b, answer: a * b, groupId };
+      }
+    }
+    return catalog;
+  }
+
+  const FACT_CATALOG = buildCatalog();
+  const STORAGE_KEY = 'multiplication_snowballs_profiles_v1';
+
+  /* =========================================================================
+   * 2. STATE & LOCAL STORAGE PROFILE MANAGEMENT
+   * ========================================================================= */
+  let profiles = loadProfiles();
+  let currentPlayer = null;
+
+  // Session state
+  const MAX_SNOWMEN = 5;
+  const STACK_TARGET = 10;
+  const MELT_INTERVAL_MS = 10000; // 1 snowball melts every 10 seconds
+  const BALL_SPACING_PX = 29;
+
+  // Behind-the-scenes Spaced Repetition timing thresholds (in seconds)
+  const PERFECT_RECALL_SEC = 7.0;
+  const SLOW_ANSWER_SEC = 20.0;
+
+  let stacks = []; // Array of 5 stack objects
+  let sessionActive = false;
+  let celebrationInProgress = false;
+  let grandFinaleActive = false;
+
+  // Current question state
+  let currentFact = null;
+  let lastFactId = null;
+  let typedAnswer = '';
+  let questionStartTime = 0;
+  let sessionTurn = 0;
+  let lastFrameTime = performance.now();
+
+  function loadProfiles() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveProfiles() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+    } catch (e) {}
+  }
+
+  function createProfile(name, selectedGroupIds) {
+    const unlockedGroups = selectedGroupIds.length > 0 ? selectedGroupIds : ['squares'];
+    const factsState = {};
+    Object.values(FACT_CATALOG).forEach(f => {
+      factsState[f.id] = {
+        id: f.id,
+        easiness: 2.5,
+        interval: 0,
+        repetitions: 0,
+        masteryPoints: 0, // 2 points = Mastered
+        dueTurn: 0,
+        lastSeenTurn: -10,
+        lastTimeSec: null
+      };
+    });
+
+    const profile = {
+      id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      name: name.trim(),
+      unlockedGroups,
+      facts: factsState,
+      sessionsCompleted: 0,
+      allMasteredCelebrated: false
+    };
+    profiles.push(profile);
+    saveProfiles();
+    return profile;
+  }
+
+  /* =========================================================================
+   * 3. SPACED REPETITION & MASTERY LOGIC (BEHIND THE SCENES TIMING)
+   * ========================================================================= */
+  function isFactMastered(factState) {
+    return factState.masteryPoints >= 2;
+  }
+
+  function getActiveFactsForPlayer(player) {
+    return Object.values(FACT_CATALOG).filter(f => player.unlockedGroups.includes(f.groupId));
+  }
+
+  function getGroupMasteryStats(player) {
+    const activeFacts = getActiveFactsForPlayer(player);
+    const masteredCount = activeFacts.filter(f => isFactMastered(player.facts[f.id])).length;
+    const totalPoints = activeFacts.reduce((acc, f) => acc + Math.min(2, player.facts[f.id].masteryPoints), 0);
+    const maxPoints = activeFacts.length * 2;
+    const percent = maxPoints > 0 ? Math.round((totalPoints / maxPoints) * 100) : 0;
+    return {
+      masteredCount,
+      totalCount: activeFacts.length,
+      allActiveMastered: masteredCount === activeFacts.length && activeFacts.length > 0,
+      percent
+    };
+  }
+
+  function areAllEightGroupsMastered(player) {
+    if (player.unlockedGroups.length < FACT_GROUPS.length) return false;
+    return Object.values(FACT_CATALOG).every(f => isFactMastered(player.facts[f.id]));
+  }
+
+  /**
+   * Update Spaced Repetition parameters silently based on response time and accuracy:
+   * - < 7s: Perfect recall -> +2 mastery points (or +1 if recovering from miss)
+   * - 7s..20s: Moderate recall -> +1 mastery point
+   * - > 20s: Counts as wrong answer for SR (resets repetitions & masteryPoints),
+   *          but caller still triggers snowball animations!
+   */
+  function recordFactAttempt(factId, isCorrect, elapsedSeconds) {
+    const st = currentPlayer.facts[factId];
+    sessionTurn++;
+    st.lastSeenTurn = sessionTurn;
+    st.lastTimeSec = elapsedSeconds;
+
+    if (!isCorrect || elapsedSeconds > SLOW_ANSWER_SEC) {
+      // Wrong answer OR slower than 20 seconds -> treated as wrong in Spaced Repetition
+      st.repetitions = 0;
+      st.masteryPoints = 0;
+      st.easiness = Math.max(1.3, st.easiness - 0.25);
+      st.interval = 1;
+      st.dueTurn = sessionTurn + 1;
+      st.hadMiss = true;
+    } else if (elapsedSeconds < PERFECT_RECALL_SEC) {
+      // Under 7 seconds -> Perfect recall!
+      st.repetitions += 1;
+      const gain = st.hadMiss ? 1 : 2;
+      st.masteryPoints = Math.min(2, st.masteryPoints + gain);
+      if (st.masteryPoints >= 2) st.hadMiss = false;
+      st.easiness = Math.min(3.0, st.easiness + 0.15);
+      st.interval = st.repetitions === 1 ? 3 : Math.max(3, Math.round(st.interval * st.easiness));
+      st.dueTurn = sessionTurn + st.interval;
+    } else {
+      // Between 7 and 20 seconds -> Moderate recall
+      st.repetitions += 1;
+      st.masteryPoints = Math.min(2, st.masteryPoints + 1);
+      const penalty = elapsedSeconds > 14 ? 0.08 : 0.0;
+      st.easiness = Math.max(1.3, st.easiness - penalty);
+      st.interval = st.repetitions === 1 ? 2 : Math.max(2, Math.round(st.interval * 1.4));
+      st.dueTurn = sessionTurn + st.interval;
+    }
+
+    saveProfiles();
+    updateHud();
+  }
+
+  function selectNextFact() {
+    const activeFacts = getActiveFactsForPlayer(currentPlayer);
+    const candidates = activeFacts.length > 1
+      ? activeFacts.filter(f => f.id !== lastFactId)
+      : activeFacts;
+
+    // Separate into unmastered and mastered (for spaced reinforcement of earlier groups)
+    const unmastered = [];
+    const dueMastered = [];
+
+    for (const f of candidates) {
+      const st = currentPlayer.facts[f.id];
+      if (!isFactMastered(st)) {
+        unmastered.push({ fact: f, st });
+      } else if (st.dueTurn <= sessionTurn) {
+        dueMastered.push({ fact: f, st });
+      }
+    }
+
+    // Reinforce due mastered facts ~25% of the time if available, or if no unmastered remain
+    if ((unmastered.length === 0 && dueMastered.length > 0) ||
+        (dueMastered.length > 0 && Math.random() < 0.25)) {
+      dueMastered.sort((a, b) => (a.st.dueTurn - b.st.dueTurn) || (a.st.easiness - b.st.easiness));
+      return dueMastered[0].fact;
+    }
+
+    if (unmastered.length > 0) {
+      // Prioritize due unmastered facts, lowest masteryPoints, then lowest easiness
+      unmastered.sort((a, b) => {
+        const aDue = a.st.dueTurn <= sessionTurn ? 0 : 1;
+        const bDue = b.st.dueTurn <= sessionTurn ? 0 : 1;
+        if (aDue !== bDue) return aDue - bDue;
+        if (a.st.masteryPoints !== b.st.masteryPoints) return a.st.masteryPoints - b.st.masteryPoints;
+        if (a.st.dueTurn !== b.st.dueTurn) return a.st.dueTurn - b.st.dueTurn;
+        return a.st.easiness - b.st.easiness;
+      });
+      const poolSize = Math.min(2, unmastered.length);
+      return unmastered[Math.floor(Math.random() * poolSize)].fact;
+    }
+
+    // All active facts are mastered (e.g. continued review session): pick least recently seen / lowest dueTurn
+    const allSorted = candidates
+      .map(f => ({ fact: f, st: currentPlayer.facts[f.id] }))
+      .sort((a, b) => (a.st.dueTurn - b.st.dueTurn) || (a.st.lastSeenTurn - b.st.lastSeenTurn));
+    return allSorted[0].fact;
+  }
+
+  /* =========================================================================
+   * 4. SNOWMAN STACKS, MELTING & ANIMATIONS
+   * ========================================================================= */
+  const stageEl = document.getElementById('snowman-stage');
+
+  function initSnowmanStage() {
+    stageEl.innerHTML = '';
+    stacks = [];
+
+    for (let i = 0; i < MAX_SNOWMEN; i++) {
+      const slotEl = document.createElement('div');
+      slotEl.className = 'snowman-slot';
+
+      const shadowEl = document.createElement('div');
+      shadowEl.className = 'slot-base-shadow';
+
+      const ballsContainer = document.createElement('div');
+      ballsContainer.className = 'stack-balls-container';
+
+      const gaugeEl = document.createElement('div');
+      gaugeEl.className = 'melt-gauge';
+      const gaugeBar = document.createElement('div');
+      gaugeBar.className = 'melt-gauge-bar';
+      gaugeEl.appendChild(gaugeBar);
+
+      const countLabel = document.createElement('div');
+      countLabel.className = 'stack-count-label';
+      countLabel.textContent = '0 / 10';
+
+      slotEl.appendChild(shadowEl);
+      slotEl.appendChild(ballsContainer);
+      slotEl.appendChild(gaugeEl);
+      slotEl.appendChild(countLabel);
+      stageEl.appendChild(slotEl);
+
+      stacks.push({
+        index: i,
+        slotEl,
+        ballsContainer,
+        gaugeEl,
+        gaugeBar,
+        countLabel,
+        balls: [],         // DOM elements currently in stack
+        inFlightCount: 0,  // Snowballs currently flying toward this stack
+        completed: false,
+        meltElapsedMs: 0,
+        noseEl: null
+      });
+    }
+  }
+
+  // Find the active unfinished stack, or the first empty ground slot to start a new stack
+  function getTargetStackForThrow() {
+    for (const st of stacks) {
+      const total = st.balls.length + st.inFlightCount;
+      if (!st.completed && total > 0 && total < STACK_TARGET) {
+        return st;
+      }
+    }
+    for (const st of stacks) {
+      const total = st.balls.length + st.inFlightCount;
+      if (!st.completed && total === 0) {
+        return st;
+      }
+    }
+    return stacks.find(st => !st.completed) || null;
+  }
+
+  function repositionStackBalls(stack) {
+    stack.balls.forEach((ballEl, idx) => {
+      ballEl.style.bottom = `${idx * BALL_SPACING_PX}px`;
+      ballEl.style.zIndex = String(10 + idx);
+    });
+    const shownCount = Math.min(STACK_TARGET, stack.balls.length);
+    stack.countLabel.textContent = stack.completed ? '⛄ Done!' : `${shownCount} / 10`;
+  }
+
+  function decorateCompletedSnowman(stack) {
+    if (stack.completed || stack.balls.length < STACK_TARGET) return;
+    stack.completed = true;
+    stack.gaugeEl.classList.remove('visible');
+    stack.countLabel.textContent = '⛄ Protected!';
+
+    // Top 2 snowballs: index 8 (9th ball, torso) and index 9 (10th ball, head)
+    const torsoBall = stack.balls[8];
+    const headBall = stack.balls[9];
+
+    if (torsoBall) {
+      torsoBall.textContent = '';
+      const torso = document.createElement('div');
+      torso.className = 'snowman-torso';
+      torso.innerHTML = `
+        <div class="stick-arm left"></div>
+        <div class="stick-arm right"></div>
+        <div class="coal-btn b1"></div>
+        <div class="coal-btn b2"></div>
+        <div class="coal-btn b3"></div>
+      `;
+      torsoBall.appendChild(torso);
+    }
+
+    if (headBall) {
+      headBall.textContent = '';
+      const face = document.createElement('div');
+      face.className = 'snowman-face';
+      face.innerHTML = `
+        <div class="umbrella">
+          <div class="umbrella-canopy"></div>
+          <div class="umbrella-shaft"></div>
+        </div>
+        <div class="eye left"></div>
+        <div class="eye right"></div>
+        <div class="carrot-nose"></div>
+        <div class="smile"></div>
+      `;
+      headBall.appendChild(face);
+      stack.noseEl = face.querySelector('.carrot-nose');
+
+      if (grandFinaleActive) {
+        attachBalloonToSnowman(stack);
+      }
+    }
+
+    updateHud();
+    checkSessionCompletionState();
+  }
+
+  function attachBalloonToSnowman(stack) {
+    if (!stack.balls[9]) return;
+    if (stack.balls[9].querySelector('.snowman-balloon')) return;
+    const balloon = document.createElement('div');
+    balloon.className = 'snowman-balloon';
+    const colors = [
+      'radial-gradient(circle at 30% 30%, #fda4af, #e11d48)',
+      'radial-gradient(circle at 30% 30%, #fde047, #ca8a04)',
+      'radial-gradient(circle at 30% 30%, #86efac, #16a34a)',
+      'radial-gradient(circle at 30% 30%, #c4b5fd, #7c3aed)',
+      'radial-gradient(circle at 30% 30%, #7dd3fc, #0284c7)'
+    ];
+    balloon.style.background = colors[stack.index % colors.length];
+    stack.balls[9].appendChild(balloon);
+  }
+
+  // Melt the bottom snowball of a stack and animate the stack settling down
+  function meltBottomSnowball(stack, onDone) {
+    if (stack.balls.length === 0) {
+      if (onDone) onDone();
+      return;
+    }
+    const bottomBall = stack.balls.shift();
+    bottomBall.classList.add('melting-away');
+    repositionStackBalls(stack);
+
+    setTimeout(() => {
+      bottomBall.remove();
+      if (onDone) onDone();
+    }, 430);
+  }
+
+  // If a stack gets too high (> 10 snowballs), animate melting down to 10, then decorate
+  function normalizeStackHeightAndCheckComplete(stack) {
+    if (stack.balls.length > STACK_TARGET) {
+      meltBottomSnowball(stack, () => {
+        normalizeStackHeightAndCheckComplete(stack);
+      });
+      return;
+    }
+    if (stack.balls.length === STACK_TARGET && stack.inFlightCount === 0 && !stack.completed) {
+      decorateCompletedSnowman(stack);
+    }
+  }
+
+  // Launch a single digit snowball from origin {x, y} to target stack
+  function launchDigitSnowball(digitChar, originRect, stack, delayMs = 0) {
+    stack.inFlightCount++;
+    const targetVisualIndex = stack.balls.length + stack.inFlightCount - 1;
+
+    setTimeout(() => {
+      const flyer = document.createElement('div');
+      flyer.className = 'flying-snowball';
+      flyer.textContent = digitChar;
+      document.body.appendChild(flyer);
+
+      const startX = originRect.left + originRect.width / 2;
+      const startY = originRect.top + originRect.height / 2;
+
+      const slotRect = stack.ballsContainer.getBoundingClientRect();
+      const endX = slotRect.left + slotRect.width / 2;
+      const endY = slotRect.bottom - (targetVisualIndex * BALL_SPACING_PX) - 17;
+
+      const controlX = (startX + endX) / 2;
+      const controlY = Math.min(startY, endY) - 150;
+
+      const duration = 560;
+      const t0 = performance.now();
+
+      function animateFlight(now) {
+        const p = Math.min(1, (now - t0) / duration);
+        const inv = 1 - p;
+        const x = inv * inv * startX + 2 * inv * p * controlX + p * p * endX;
+        const y = inv * inv * startY + 2 * inv * p * controlY + p * p * endY;
+
+        flyer.style.left = `${x}px`;
+        flyer.style.top = `${y}px`;
+        flyer.style.transform = `scale(${0.85 + 0.15 * Math.sin(p * Math.PI)})`;
+
+        if (p < 1) {
+          requestAnimationFrame(animateFlight);
+        } else {
+          flyer.remove();
+          stack.inFlightCount = Math.max(0, stack.inFlightCount - 1);
+          addLandedSnowballToStack(stack, digitChar);
+        }
+      }
+
+      requestAnimationFrame(animateFlight);
+    }, delayMs);
+  }
+
+  function addLandedSnowballToStack(stack, digitChar) {
+    const ballEl = document.createElement('div');
+    ballEl.className = 'snowball-node';
+    ballEl.textContent = digitChar;
+
+    const idx = stack.balls.length;
+    ballEl.style.bottom = `${idx * BALL_SPACING_PX}px`;
+    stack.ballsContainer.appendChild(ballEl);
+    stack.balls.push(ballEl);
+
+    repositionStackBalls(stack);
+
+    if (stack.inFlightCount === 0) {
+      if (stack.balls.length > STACK_TARGET) {
+        setTimeout(() => normalizeStackHeightAndCheckComplete(stack), 180);
+      } else if (stack.balls.length === STACK_TARGET) {
+        decorateCompletedSnowman(stack);
+      }
+    }
+  }
+
+  /* =========================================================================
+   * 5. GAMEPLAY LOOP & MELT LOOP
+   * ========================================================================= */
+  const eqLeftEl = document.getElementById('eq-left');
+  const eqRightEl = document.getElementById('eq-right');
+  const answerBoxEl = document.getElementById('answer-box');
+  const feedbackMsgEl = document.getElementById('feedback-msg');
+
+  function startSession() {
+    grandFinaleActive = false;
+    stopCelebrationParticles();
+    initSnowmanStage();
+
+    sessionActive = true;
+    celebrationInProgress = false;
+    lastFactId = null;
+
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('play-panel').style.display = 'block';
+    document.getElementById('profile-modal').classList.add('hidden');
+    document.getElementById('session-modal').classList.add('hidden');
+
+    updateHud();
+    presentNextQuestion();
+  }
+
+  function updateHud() {
+    if (!currentPlayer) return;
+    document.getElementById('hud-player-name').textContent = currentPlayer.name;
+
+    const shortNames = FACT_GROUPS
+      .filter(g => currentPlayer.unlockedGroups.includes(g.id))
+      .map(g => g.short)
+      .join(', ');
+    document.getElementById('hud-groups-badge').textContent = shortNames;
+
+    const stats = getGroupMasteryStats(currentPlayer);
+    document.getElementById('hud-mastery-bar').style.width = `${stats.percent}%`;
+    document.getElementById('hud-mastery-text').textContent = `${stats.masteredCount}/${stats.totalCount}`;
+
+    const completedSnowmen = stacks.filter(s => s.completed).length;
+    document.getElementById('hud-snowmen-count').textContent = `${completedSnowmen} / ${MAX_SNOWMEN}`;
+  }
+
+  function presentNextQuestion() {
+    if (!sessionActive || celebrationInProgress) return;
+    currentFact = selectNextFact();
+    lastFactId = currentFact.id;
+    typedAnswer = '';
+    renderTypedAnswer();
+
+    eqLeftEl.textContent = currentFact.a;
+    eqRightEl.textContent = currentFact.b;
+    // Track start time silently behind the scenes
+    questionStartTime = performance.now();
+  }
+
+  function renderTypedAnswer() {
+    answerBoxEl.innerHTML = '';
+    for (let i = 0; i < typedAnswer.length; i++) {
+      const span = document.createElement('span');
+      span.className = 'answer-digit';
+      span.textContent = typedAnswer[i];
+      answerBoxEl.appendChild(span);
+    }
+  }
+
+  function handleAnswerSubmit() {
+    if (!sessionActive || celebrationInProgress || !currentFact || typedAnswer.length === 0) return;
+
+    const numericVal = parseInt(typedAnswer, 10);
+    const elapsedSec = (performance.now() - questionStartTime) / 1000;
+    const isCorrect = numericVal === currentFact.answer;
+
+    // Pass elapsedSec silently into the Spaced Repetition algorithm
+    recordFactAttempt(currentFact.id, isCorrect, elapsedSec);
+
+    if (isCorrect) {
+      feedbackMsgEl.style.color = '#16a34a';
+      feedbackMsgEl.textContent = `❄️ Correct! +${typedAnswer.length} snowball${typedAnswer.length > 1 ? 's' : ''} tossed!`;
+
+      // Launch each digit of the correct answer onto the active stack
+      const targetStack = getTargetStackForThrow();
+      if (targetStack) {
+        const digitSpans = answerBoxEl.querySelectorAll('.answer-digit');
+        const fallbackRect = answerBoxEl.getBoundingClientRect();
+
+        for (let i = 0; i < typedAnswer.length; i++) {
+          const dChar = typedAnswer[i];
+          const rect = digitSpans[i] ? digitSpans[i].getBoundingClientRect() : fallbackRect;
+          launchDigitSnowball(dChar, rect, targetStack, i * 165);
+        }
+      }
+
+      // Check if all active facts are now mastered before 5 snowmen are completed
+      const stats = getGroupMasteryStats(currentPlayer);
+      const completedSnowmen = stacks.filter(s => s.completed).length;
+
+      if (stats.allActiveMastered && completedSnowmen < MAX_SNOWMEN) {
+        triggerCelebratorySnowballBarrage();
+        return;
+      }
+
+      presentNextQuestion();
+    } else {
+      feedbackMsgEl.style.color = '#dc2626';
+      feedbackMsgEl.textContent = `Not quite! ${currentFact.a} × ${currentFact.b} = ${currentFact.answer}. Try it now!`;
+      typedAnswer = '';
+      renderTypedAnswer();
+      questionStartTime = performance.now();
+    }
+  }
+
+  // If the student masters all active groups before completing 5 snowmen,
+  // throw a celebratory volley of snowballs to complete all 5 snowmen!
+  function triggerCelebratorySnowballBarrage() {
+    if (celebrationInProgress) return;
+    celebrationInProgress = true;
+    feedbackMsgEl.style.color = '#16a34a';
+    feedbackMsgEl.textContent = '🌟 Group Mastered! Launching celebratory snowballs to finish all 5 snowmen!';
+
+    const originRect = answerBoxEl.getBoundingClientRect();
+    let delay = 250;
+
+    for (const st of stacks) {
+      if (st.completed) continue;
+      const currentTotal = st.balls.length + st.inFlightCount;
+      const needed = Math.max(0, STACK_TARGET - currentTotal);
+      for (let k = 0; k < needed; k++) {
+        const celebratoryDigit = String(Math.floor(Math.random() * 7) + 3);
+        launchDigitSnowball(celebratoryDigit, originRect, st, delay);
+        delay += 110;
+      }
+    }
+  }
+
+  function checkSessionCompletionState() {
+    const completedCount = stacks.filter(s => s.completed).length;
+    if (completedCount < MAX_SNOWMEN || !sessionActive) return;
+
+    // All 5 snowmen are now completed!
+    sessionActive = false;
+    celebrationInProgress = false;
+    currentPlayer.sessionsCompleted += 1;
+
+    const stats = getGroupMasteryStats(currentPlayer);
+    const allEightMastered = areAllEightGroupsMastered(currentPlayer);
+
+    const modalEl = document.getElementById('session-modal');
+    const titleEl = document.getElementById('session-modal-title');
+    const descEl = document.getElementById('session-modal-desc');
+    const statsBoxEl = document.getElementById('session-stats-box');
+
+    if (allEightMastered) {
+      triggerGrandFinaleCelebration();
+      titleEl.textContent = '🎆 ALL MULTIPLICATION FACTS MASTERED! 🍓';
+      descEl.textContent =
+        'Incredible job! You mastered all 8 groups! Enjoy the balloons, nose fireworks, confetti, and raining raspberries & sweet berries!';
+      statsBoxEl.innerHTML = `
+        <div>🏆 Mastered: <strong>${stats.masteredCount} / ${stats.totalCount}</strong> total facts (100%)</div>
+        <div style="margin-top:6px;">You can continue playing new sessions anytime for spaced-repetition review!</div>
+      `;
+    } else if (stats.allActiveMastered) {
+      const nextGroup = FACT_GROUPS.find(g => !currentPlayer.unlockedGroups.includes(g.id));
+      if (nextGroup) {
+        currentPlayer.unlockedGroups.push(nextGroup.id);
+        titleEl.textContent = '🎉 Session Complete & Level Up!';
+        descEl.textContent = `Congratulations! You built 5 tall snowmen and mastered all active groups! Next session adds ${nextGroup.name} while reinforcing previous facts.`;
+        statsBoxEl.innerHTML = `
+          <div>✅ Current Groups Mastered: <strong>${stats.masteredCount} / ${stats.totalCount}</strong></div>
+          <div style="margin-top:6px;">🔓 Unlocked Next: <strong>${nextGroup.name}</strong></div>
+        `;
+      }
+    } else {
+      titleEl.textContent = '⛄ 5 Tall Snowmen Completed!';
+      descEl.textContent =
+        'Great job completing 5 snowmen! Keep practicing your current groups in the next session to master all facts and unlock the next group.';
+      statsBoxEl.innerHTML = `
+        <div>📊 Current Mastery: <strong>${stats.masteredCount} / ${stats.totalCount} facts (${stats.percent}%)</strong></div>
+        <div style="margin-top:6px;">Keep building snowmen to master your current multiplication facts!</div>
+      `;
+    }
+
+    saveProfiles();
+    updateHud();
+
+    setTimeout(() => {
+      modalEl.classList.remove('hidden');
+    }, allEightMastered ? 2600 : 800);
+  }
+
+  // Main requestAnimationFrame loop for 10-second bottom snowball melting
+  function mainTick(now) {
+    const dt = now - lastFrameTime;
+    lastFrameTime = now;
+
+    if (sessionActive && !celebrationInProgress) {
+      // Unfinished Snowman Melting (1 snowball melts from the bottom every 10 seconds)
+      for (const st of stacks) {
+        if (!st.completed && st.balls.length > 0 && st.inFlightCount === 0) {
+          st.meltElapsedMs += dt;
+          st.gaugeEl.classList.add('visible');
+          const remainRatio = Math.max(0, 1 - st.meltElapsedMs / MELT_INTERVAL_MS);
+          st.gaugeBar.style.width = `${remainRatio * 100}%`;
+
+          if (st.meltElapsedMs >= MELT_INTERVAL_MS) {
+            st.meltElapsedMs = 0;
+            meltBottomSnowball(st);
+          }
+        } else {
+          st.meltElapsedMs = 0;
+          st.gaugeEl.classList.remove('visible');
+        }
+      }
+    }
+
+    requestAnimationFrame(mainTick);
+  }
+  requestAnimationFrame(mainTick);
+
+  /* =========================================================================
+   * 6. GRAND FINALE FX: CONFETTI, BALLOONS, NOSE FIREWORKS & RAINING BERRIES
+   * ========================================================================= */
+  const fxCanvas = document.getElementById('fx-canvas');
+  const fxCtx = fxCanvas.getContext('2d');
+  let fxParticles = [];
+  let fxAnimId = null;
+
+  function resizeFxCanvas() {
+    fxCanvas.width = window.innerWidth;
+    fxCanvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeFxCanvas);
+  resizeFxCanvas();
+
+  function triggerGrandFinaleCelebration() {
+    grandFinaleActive = true;
+    stacks.forEach(st => attachBalloonToSnowman(st));
+
+    fxParticles = [];
+    if (!fxAnimId) {
+      fxLoop();
+    }
+  }
+
+  function stopCelebrationParticles() {
+    grandFinaleActive = false;
+    fxParticles = [];
+    if (fxAnimId) {
+      cancelAnimationFrame(fxAnimId);
+      fxAnimId = null;
+    }
+    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  }
+
+  function spawnConfettiAndBerries() {
+    if (Math.random() < 0.45) {
+      const colors = ['#f43f5e', '#facc15', '#38bdf8', '#4ade80', '#a855f7', '#fb923c'];
+      fxParticles.push({
+        type: 'confetti',
+        x: Math.random() * fxCanvas.width,
+        y: -15,
+        vx: (Math.random() - 0.5) * 2.2,
+        vy: 2.2 + Math.random() * 2.5,
+        rot: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 0.14,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        w: 8 + Math.random() * 6,
+        h: 5 + Math.random() * 4
+      });
+    }
+
+    if (Math.random() < 0.28) {
+      const berryTypes = ['raspberry', 'raspberry', 'strawberry', 'blueberry', 'cherry'];
+      fxParticles.push({
+        type: 'berry',
+        berryKind: berryTypes[Math.floor(Math.random() * berryTypes.length)],
+        x: Math.random() * fxCanvas.width,
+        y: -24,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: 2.6 + Math.random() * 2.4,
+        rot: (Math.random() - 0.5) * 0.5
+      });
+    }
+
+    if (Math.random() < 0.22) {
+      const validStacks = stacks.filter(s => s.noseEl);
+      if (validStacks.length > 0) {
+        const chosen = validStacks[Math.floor(Math.random() * validStacks.length)];
+        const noseRect = chosen.noseEl.getBoundingClientRect();
+        const nx = noseRect.right;
+        const ny = noseRect.top + noseRect.height / 2;
+        const sparkColors = ['#fde047', '#fb7185', '#38bdf8', '#4ade80', '#f97316', '#e879f9'];
+
+        for (let i = 0; i < 18; i++) {
+          const angle = (Math.random() - 0.55) * 1.35;
+          const speed = 2.5 + Math.random() * 5.2;
+          fxParticles.push({
+            type: 'firework',
+            x: nx,
+            y: ny,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 1.2,
+            life: 1.0,
+            decay: 0.018 + Math.random() * 0.018,
+            color: sparkColors[Math.floor(Math.random() * sparkColors.length)],
+            radius: 2.2 + Math.random() * 2.2
+          });
+        }
+      }
+    }
+  }
+
+  function drawBerry(ctx, kind, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (kind === 'raspberry') {
+      ctx.fillStyle = '#e11d48';
+      const offsets = [
+        [-4, -3], [0, -4], [4, -3],
+        [-5, 1],  [0, 1],  [5, 1],
+        [-3, 5],  [3, 5],  [0, 7]
+      ];
+      offsets.forEach(([dx, dy]) => {
+        ctx.beginPath();
+        ctx.arc(dx, dy, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath();
+      ctx.moveTo(-6, -6);
+      ctx.lineTo(0, -10);
+      ctx.lineTo(6, -6);
+      ctx.lineTo(0, -4);
+      ctx.closePath();
+      ctx.fill();
+    } else if (kind === 'strawberry') {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.moveTo(-7, -4);
+      ctx.quadraticCurveTo(0, -7, 7, -4);
+      ctx.quadraticCurveTo(6, 6, 0, 9);
+      ctx.quadraticCurveTo(-6, 6, -7, -4);
+      ctx.fill();
+      ctx.fillStyle = '#fef08a';
+      [[-3, -1], [2, -1], [0, 3], [-2, 4], [3, 3]].forEach(([sx, sy]) => {
+        ctx.fillRect(sx, sy, 1.5, 1.5);
+      });
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-4, -7, 8, 3);
+    } else if (kind === 'blueberry') {
+      ctx.fillStyle = '#1d4ed8';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#93c5fd';
+      ctx.beginPath();
+      ctx.arc(-2, -2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = '#15803d';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-4, 2);
+      ctx.lineTo(0, -8);
+      ctx.lineTo(5, 2);
+      ctx.stroke();
+      ctx.fillStyle = '#be123c';
+      ctx.beginPath();
+      ctx.arc(-4, 4, 4.5, 0, Math.PI * 2);
+      ctx.arc(5, 4, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function fxLoop() {
+    if (!grandFinaleActive) return;
+    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+    spawnConfettiAndBerries();
+
+    for (let i = fxParticles.length - 1; i >= 0; i--) {
+      const p = fxParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+
+      if (p.type === 'confetti') {
+        p.rot += p.vRot;
+        fxCtx.save();
+        fxCtx.translate(p.x, p.y);
+        fxCtx.rotate(p.rot);
+        fxCtx.fillStyle = p.color;
+        fxCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        fxCtx.restore();
+        if (p.y > fxCanvas.height + 20) fxParticles.splice(i, 1);
+      } else if (p.type === 'berry') {
+        drawBerry(fxCtx, p.berryKind, p.x, p.y);
+        if (p.y > fxCanvas.height + 30) fxParticles.splice(i, 1);
+      } else if (p.type === 'firework') {
+        p.vy += 0.12;
+        p.life -= p.decay;
+        if (p.life <= 0) {
+          fxParticles.splice(i, 1);
+          continue;
+        }
+        fxCtx.save();
+        fxCtx.globalAlpha = Math.max(0, p.life);
+        fxCtx.fillStyle = p.color;
+        fxCtx.beginPath();
+        fxCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        fxCtx.fill();
+        fxCtx.restore();
+      }
+    }
+
+    fxAnimId = requestAnimationFrame(fxLoop);
+  }
+
+  /* =========================================================================
+   * 7. INPUT HANDLERS (KEYBOARD & ON-SCREEN KEYPAD) & PROFILE UI
+   * ========================================================================= */
+  function appendDigit(digit) {
+    if (!sessionActive || celebrationInProgress) return;
+    if (typedAnswer.length < 3) {
+      typedAnswer += String(digit);
+      renderTypedAnswer();
+    }
+  }
+
+  function deleteLastDigit() {
+    if (!sessionActive || celebrationInProgress) return;
+    typedAnswer = typedAnswer.slice(0, -1);
+    renderTypedAnswer();
+  }
+
+  document.querySelectorAll('.key-btn[data-digit]').forEach(btn => {
+    btn.addEventListener('click', () => appendDigit(btn.dataset.digit));
+  });
+  document.getElementById('key-clear').addEventListener('click', deleteLastDigit);
+  document.getElementById('key-enter').addEventListener('click', handleAnswerSubmit);
+
+  window.addEventListener('keydown', e => {
+    if (!sessionActive || celebrationInProgress) return;
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      appendDigit(e.key);
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      deleteLastDigit();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAnswerSubmit();
+    }
+  });
+
+  const profileListEl = document.getElementById('profile-list');
+  const selectViewEl = document.getElementById('profile-select-view');
+  const createViewEl = document.getElementById('profile-create-view');
+  const newPlayerNameInput = document.getElementById('new-player-name');
+  const startingGroupsGrid = document.getElementById('starting-groups-grid');
+
+  function renderStartingGroupsCheckboxes() {
+    startingGroupsGrid.innerHTML = '';
+    FACT_GROUPS.forEach((g, idx) => {
+      const label = document.createElement('label');
+      label.className = 'group-checkbox';
+      const checkedAttr = idx === 0 ? 'checked' : '';
+      label.innerHTML = `
+        <input type="checkbox" value="${g.id}" ${checkedAttr} />
+        <span>${g.name}</span>
+      `;
+      startingGroupsGrid.appendChild(label);
+    });
+  }
+
+  function renderProfileModal() {
+    sessionActive = false;
+    stopCelebrationParticles();
+    document.getElementById('profile-modal').classList.remove('hidden');
+    document.getElementById('session-modal').classList.add('hidden');
+    selectViewEl.classList.remove('hidden');
+    createViewEl.classList.add('hidden');
+
+    profileListEl.innerHTML = '';
+    if (profiles.length === 0) {
+      profileListEl.innerHTML = `
+        <div style="text-align:center; padding:18px; color:#64748b; background:#f8fafc; border-radius:12px;">
+          No player profiles yet. Click <strong>+ New Player</strong> below to begin!
+        </div>
+      `;
+      return;
+    }
+
+    profiles.forEach(p => {
+      const stats = getGroupMasteryStats(p);
+      const item = document.createElement('div');
+      item.className = 'profile-item';
+      item.innerHTML = `
+        <div>
+          <div class="profile-name">⛄ ${escapeHtml(p.name)}</div>
+          <div class="profile-meta">
+            Groups: ${p.unlockedGroups.length} / 8 &bull; Mastery: ${stats.masteredCount}/${stats.totalCount} facts
+          </div>
+        </div>
+        <span class="badge">Play ➜</span>
+      `;
+      item.addEventListener('click', () => {
+        currentPlayer = p;
+        startSession();
+      });
+      profileListEl.appendChild(item);
+    });
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  document.getElementById('btn-show-new-player').addEventListener('click', () => {
+    selectViewEl.classList.add('hidden');
+    createViewEl.classList.remove('hidden');
+    newPlayerNameInput.value = '';
+    renderStartingGroupsCheckboxes();
+    newPlayerNameInput.focus();
+  });
+
+  document.getElementById('btn-cancel-create').addEventListener('click', () => {
+    createViewEl.classList.add('hidden');
+    selectViewEl.classList.remove('hidden');
+  });
+
+  document.getElementById('btn-create-player').addEventListener('click', () => {
+    const name = newPlayerNameInput.value.trim();
+    if (!name) {
+      newPlayerNameInput.focus();
+      return;
+    }
+    const checkedBoxes = Array.from(startingGroupsGrid.querySelectorAll('input[type="checkbox"]:checked'));
+    const groupIds = checkedBoxes.map(cb => cb.value);
+    currentPlayer = createProfile(name, groupIds.length ? groupIds : ['squares']);
+    startSession();
+  });
+
+  document.getElementById('btn-switch-player').addEventListener('click', renderProfileModal);
+  document.getElementById('btn-session-switch-user').addEventListener('click', renderProfileModal);
+  document.getElementById('btn-next-session').addEventListener('click', startSession);
+
+  initSnowmanStage();
+  renderProfileModal();
+})();
+</script>
+</body>
+</html>
